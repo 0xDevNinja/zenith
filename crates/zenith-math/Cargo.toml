@@ -1,0 +1,15 @@
+[package]
+name = "zenith-math"
+version = "0.1.0"
+edition = "2021"
+description = "Shared fixed-point math for Zenith (Q64.64, U256, mul-div rounding)."
+license = "MIT"
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+ruint = { version = "1", default-features = false }
+
+[dev-dependencies]
+proptest = "1"

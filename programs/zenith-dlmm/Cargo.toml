@@ -1,0 +1,22 @@
+[package]
+name = "zenith-dlmm"
+version = "0.1.0"
+edition = "2021"
+description = "Zenith liquidity-book DEX (discrete price bins, dynamic fees)."
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "zenith_dlmm"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build"]
+
+[dependencies]
+anchor-lang = "0.31.0"
+zenith-math = { path = "../../crates/zenith-math" }

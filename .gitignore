@@ -1,0 +1,33 @@
+# Rust / Anchor
+/target
+**/target
+Cargo.lock
+.anchor
+test-ledger
+**/*.rs.bk
+
+# Solana keys (never commit)
+*.json.key
+**/keypair*.json
+/wallet*.json
+
+# Node
+node_modules
+dist
+build
+.pnpm-store
+*.tsbuildinfo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.DS_Store
+.idea
+.vscode
+*.log
+
+# Internal docs (kept local, not in public repo)
+/docs/
