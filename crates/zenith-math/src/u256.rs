@@ -166,6 +166,25 @@ mod tests {
         assert_eq!(shl_div(1u128 << 65, 64, 1, D), Err(MathError::Overflow));
     }
 
+    #[test]
+    fn shl_div_max_shift_boundary() {
+        // shift == 128 is allowed (this is the recip path): 2^128 / 2^64 = 2^64
+        assert_eq!(shl_div(1, 128, 1u128 << 64, D).unwrap(), 1u128 << 64);
+        // and 2^128 / 1 = 2^128 overflows u128
+        assert_eq!(shl_div(1, 128, 1, D), Err(MathError::Overflow));
+        // big numerator that still fits the result: (3 << 128) / 2^127 = 6
+        assert_eq!(shl_div(3, 128, 1u128 << 127, D).unwrap(), 6);
+    }
+
+    #[test]
+    fn mul_shr_large_shift() {
+        // exercise pow2 near the top: (2^127 * 2^127) >> 254 = 2^254 >> 254 = 1
+        assert_eq!(mul_shr(1u128 << 127, 1u128 << 127, 254, D).unwrap(), 1);
+        // >> 255 floors to 0 (Down) but rounds up to 1 (Up); no panic at high shift
+        assert_eq!(mul_shr(1u128 << 127, 1u128 << 127, 255, D).unwrap(), 0);
+        assert_eq!(mul_shr(1u128 << 127, 1u128 << 127, 255, U).unwrap(), 1);
+    }
+
     // Reference: u128 mul_div via u128 only works when a*b fits; use a wider
     // check via the same U256 path is circular, so compare against the
     // mathematically-derived floor/ceil using checked u128 where it fits.
