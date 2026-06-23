@@ -13,9 +13,7 @@
 //! - Fallible ops return `Option`; `None` means overflow of the `u128` result
 //!   or division by zero. Nothing overflows silently.
 
-use ruint::aliases::U256;
-
-use crate::{Rounding, SCALE_OFFSET};
+use crate::{mul_shr, shl_div, Rounding, SCALE_OFFSET};
 
 /// `2^64`, the value of `1.0` in Q64.64.
 const ONE_BITS: u128 = 1u128 << SCALE_OFFSET;
@@ -23,16 +21,6 @@ const ONE_BITS: u128 = 1u128 << SCALE_OFFSET;
 /// Unsigned Q64.64 fixed-point number. Value = `bits / 2^64`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Q64x64(u128);
-
-/// Narrow a `U256` back to `u128`, returning `None` if it does not fit.
-#[inline]
-fn to_u128(x: U256) -> Option<u128> {
-    let limbs = x.as_limbs();
-    if limbs[2] != 0 || limbs[3] != 0 {
-        return None;
-    }
-    Some((limbs[0] as u128) | ((limbs[1] as u128) << 64))
-}
 
 impl Q64x64 {
     /// The value `0.0`.
@@ -55,13 +43,8 @@ impl Q64x64 {
     /// Returns `None` if `b == 0` or the result exceeds `u128`.
     #[inline]
     pub fn from_ratio(a: u128, b: u128, rounding: Rounding) -> Option<Self> {
-        if b == 0 {
-            return None;
-        }
-        let num = U256::from(a) << SCALE_OFFSET; // a * 2^64: <= 192 bits, fits U256
-        let den = U256::from(b);
-        let q = div_round(num, den, rounding);
-        to_u128(q).map(Self)
+        // bits = (a << 64) / b
+        shl_div(a, SCALE_OFFSET, b, rounding).ok().map(Self)
     }
 
     /// Reinterpret raw Q64.64 bits.
@@ -129,37 +112,24 @@ impl Q64x64 {
     /// `None` if the scaled result exceeds `u128`.
     #[inline]
     pub fn mul(self, rhs: Self, rounding: Rounding) -> Option<Self> {
-        // (a/2^64) * (b/2^64) = (a*b)/2^128, stored as bits = a*b/2^64.
-        // (2^128-1)^2 < 2^256, so the U256 product can never overflow/panic.
-        let prod = U256::from(self.0) * U256::from(rhs.0);
-        let q = shr_round(prod, SCALE_OFFSET, rounding);
-        to_u128(q).map(Self)
+        // (a/2^64) * (b/2^64) = (a*b)/2^128, stored as bits = (a*b) >> 64.
+        mul_shr(self.0, rhs.0, SCALE_OFFSET, rounding).ok().map(Self)
     }
 
     /// Divide `self / rhs`, rounded as requested.
     /// `None` if `rhs` is zero or the result exceeds `u128`.
     #[inline]
     pub fn div(self, rhs: Self, rounding: Rounding) -> Option<Self> {
-        if rhs.0 == 0 {
-            return None;
-        }
-        let num = U256::from(self.0) << SCALE_OFFSET; // a * 2^64: 128+64 = 192 bits, fits U256
-        let den = U256::from(rhs.0);
-        let q = div_round(num, den, rounding);
-        to_u128(q).map(Self)
+        // bits = (a << 64) / b
+        shl_div(self.0, SCALE_OFFSET, rhs.0, rounding).ok().map(Self)
     }
 
     /// Reciprocal `1 / self`, rounded as requested.
     /// `None` if `self` is zero or the result exceeds `u128`.
     #[inline]
     pub fn recip(self, rounding: Rounding) -> Option<Self> {
-        if self.0 == 0 {
-            return None;
-        }
-        let num = U256::from(1u128) << (2 * SCALE_OFFSET); // 2^128 (129 bits), fits U256
-        let den = U256::from(self.0);
-        let q = div_round(num, den, rounding);
-        to_u128(q).map(Self)
+        // bits = 2^128 / self = (1 << 128) / self
+        shl_div(1, 2 * SCALE_OFFSET, self.0, rounding).ok().map(Self)
     }
 
     // --- token-amount conversions ---
@@ -169,10 +139,8 @@ impl Q64x64 {
     /// `None` if the result exceeds `u128`.
     #[inline]
     pub fn mul_int(self, amount: u128, rounding: Rounding) -> Option<u128> {
-        // (2^128-1)^2 < 2^256, so the U256 product can never overflow/panic.
-        let prod = U256::from(self.0) * U256::from(amount);
-        let q = shr_round(prod, SCALE_OFFSET, rounding);
-        to_u128(q)
+        // value * amount = (self.0 * amount) >> 64
+        mul_shr(self.0, amount, SCALE_OFFSET, rounding).ok()
     }
 
     /// Divide an integer token `amount` by this value, returning an integer
@@ -180,38 +148,16 @@ impl Q64x64 {
     /// `None` if `self` is zero or the result exceeds `u128`.
     #[inline]
     pub fn div_int(self, amount: u128, rounding: Rounding) -> Option<u128> {
-        if self.0 == 0 {
-            return None;
-        }
-        let num = U256::from(amount) << SCALE_OFFSET; // amount * 2^64
-        let den = U256::from(self.0);
-        let q = div_round(num, den, rounding);
-        to_u128(q)
+        // amount / value = (amount << 64) / self.0
+        shl_div(amount, SCALE_OFFSET, self.0, rounding).ok()
     }
-}
-
-/// `num / den` over `U256`, applying the rounding direction to a nonzero remainder.
-#[inline]
-fn div_round(num: U256, den: U256, rounding: Rounding) -> U256 {
-    let q = num / den;
-    match rounding {
-        Rounding::Up if num % den != U256::ZERO => q + U256::from(1u128),
-        _ => q,
-    }
-}
-
-/// `x >> shift` over `U256`, applying the rounding direction to dropped bits.
-/// Equivalent to dividing by `2^shift`; shares the single rounding decision in
-/// [`div_round`] so there is only one copy of the rounding logic to audit.
-#[inline]
-fn shr_round(x: U256, shift: u32, rounding: Rounding) -> U256 {
-    div_round(x, U256::from(1u128) << (shift as usize), rounding)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use proptest::prelude::*;
+    use ruint::aliases::U256;
 
     const D: Rounding = Rounding::Down;
     const U: Rounding = Rounding::Up;

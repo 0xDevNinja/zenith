@@ -23,6 +23,9 @@ pub enum Rounding {
 pub const SCALE_OFFSET: u32 = 64;
 
 mod q64;
-pub use q64::Q64x64;
+mod u256;
 
-// TODO(M0): U256 mul-div helpers, sqrt, bin-price pow (separate issues).
+pub use q64::Q64x64;
+pub use u256::{mul_div, mul_shr, shl_div, MathError, MathResult};
+
+// TODO(M0): sqrt + sqrt-price helpers (#10), bin-price pow (#11), vectors (#12).
