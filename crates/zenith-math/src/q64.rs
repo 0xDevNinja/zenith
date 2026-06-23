@@ -58,7 +58,7 @@ impl Q64x64 {
         if b == 0 {
             return None;
         }
-        let num = U256::from(a) << SCALE_OFFSET; // a * 2^64
+        let num = U256::from(a) << SCALE_OFFSET; // a * 2^64: <= 192 bits, fits U256
         let den = U256::from(b);
         let q = div_round(num, den, rounding);
         to_u128(q).map(Self)
@@ -130,7 +130,8 @@ impl Q64x64 {
     #[inline]
     pub fn mul(self, rhs: Self, rounding: Rounding) -> Option<Self> {
         // (a/2^64) * (b/2^64) = (a*b)/2^128, stored as bits = a*b/2^64.
-        let prod = U256::from(self.0) * U256::from(rhs.0); // <= 256 bits, exact
+        // (2^128-1)^2 < 2^256, so the U256 product can never overflow/panic.
+        let prod = U256::from(self.0) * U256::from(rhs.0);
         let q = shr_round(prod, SCALE_OFFSET, rounding);
         to_u128(q).map(Self)
     }
@@ -142,7 +143,7 @@ impl Q64x64 {
         if rhs.0 == 0 {
             return None;
         }
-        let num = U256::from(self.0) << SCALE_OFFSET; // a * 2^64
+        let num = U256::from(self.0) << SCALE_OFFSET; // a * 2^64: 128+64 = 192 bits, fits U256
         let den = U256::from(rhs.0);
         let q = div_round(num, den, rounding);
         to_u128(q).map(Self)
@@ -155,7 +156,7 @@ impl Q64x64 {
         if self.0 == 0 {
             return None;
         }
-        let num = U256::from(1u128) << (2 * SCALE_OFFSET); // 2^128
+        let num = U256::from(1u128) << (2 * SCALE_OFFSET); // 2^128 (129 bits), fits U256
         let den = U256::from(self.0);
         let q = div_round(num, den, rounding);
         to_u128(q).map(Self)
@@ -168,7 +169,8 @@ impl Q64x64 {
     /// `None` if the result exceeds `u128`.
     #[inline]
     pub fn mul_int(self, amount: u128, rounding: Rounding) -> Option<u128> {
-        let prod = U256::from(self.0) * U256::from(amount); // value * amount * 2^64
+        // (2^128-1)^2 < 2^256, so the U256 product can never overflow/panic.
+        let prod = U256::from(self.0) * U256::from(amount);
         let q = shr_round(prod, SCALE_OFFSET, rounding);
         to_u128(q)
     }
@@ -199,25 +201,17 @@ fn div_round(num: U256, den: U256, rounding: Rounding) -> U256 {
 }
 
 /// `x >> shift` over `U256`, applying the rounding direction to dropped bits.
+/// Equivalent to dividing by `2^shift`; shares the single rounding decision in
+/// [`div_round`] so there is only one copy of the rounding logic to audit.
 #[inline]
 fn shr_round(x: U256, shift: u32, rounding: Rounding) -> U256 {
-    let q = x >> (shift as usize);
-    match rounding {
-        Rounding::Up => {
-            let dropped = x - (q << (shift as usize));
-            if dropped != U256::ZERO {
-                q + U256::from(1u128)
-            } else {
-                q
-            }
-        }
-        Rounding::Down => q,
-    }
+    div_round(x, U256::from(1u128) << (shift as usize), rounding)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::prelude::*;
 
     const D: Rounding = Rounding::Down;
     const U: Rounding = Rounding::Up;
@@ -294,9 +288,10 @@ mod tests {
         let down = third.mul(third, D).unwrap();
         let up = third.mul(third, U).unwrap();
         assert_eq!(up.to_bits() - down.to_bits(), 1);
-        // large * large overflows u128 result.
+        // large * large overflows the u128 result.
         let big = Q64x64::from_int(1u64 << 40);
-        assert_eq!(big.mul(big, D), None); // 2^80 integer part > u64 range of int part
+        // product value 2^80 -> bits 2^144 exceeds u128, narrowing returns None.
+        assert_eq!(big.mul(big, D), None);
     }
 
     #[test]
@@ -352,5 +347,82 @@ mod tests {
     fn ordering() {
         assert!(Q64x64::from_int(1) < Q64x64::from_int(2));
         assert!(Q64x64::from_ratio(1, 2, D).unwrap() < Q64x64::ONE);
+    }
+
+    #[test]
+    fn boundaries() {
+        // from_int(u64::MAX) does not truncate.
+        let m = Q64x64::from_int(u64::MAX);
+        assert_eq!(m.to_bits(), (u64::MAX as u128) << 64);
+        assert_eq!(m.floor_int(), u64::MAX as u128);
+
+        // MAX round-trips through mul by ONE.
+        assert_eq!(Q64x64::MAX.mul(Q64x64::ONE, D).unwrap(), Q64x64::MAX);
+
+        // recip of the smallest nonzero ulp: 1 / 2^-64 = 2^64 bits -> 2^128, overflows.
+        assert_eq!(Q64x64::from_bits(1).recip(D), None);
+        // recip of a small-but-representable value stays in range.
+        let small = Q64x64::from_int(1u64 << 40); // 2^40
+        assert_eq!(small.recip(D).unwrap().to_bits(), 1u128 << (64 - 40));
+    }
+
+    #[test]
+    fn overflow_paths_return_none() {
+        // mul: MAX * MAX overflows.
+        assert_eq!(Q64x64::MAX.mul(Q64x64::MAX, D), None);
+        // div: MAX / (tiny) overflows.
+        assert_eq!(Q64x64::MAX.div(Q64x64::from_bits(1), D), None);
+        // from_ratio: huge numerator overflows after the << 64 scaling.
+        assert_eq!(Q64x64::from_ratio(u128::MAX, 1, D), None);
+        // mul_int: large price * large amount overflows the integer result.
+        assert_eq!(Q64x64::from_int(u64::MAX).mul_int(u128::MAX, D), None);
+        // div_int: huge amount / tiny price overflows.
+        assert_eq!(Q64x64::from_bits(1).div_int(u128::MAX, D), None);
+    }
+
+    proptest! {
+        // Up is never below Down and differs by at most one ulp, for every op.
+        #[test]
+        fn mul_rounding_direction(a in any::<u128>(), b in any::<u128>()) {
+            let (x, y) = (Q64x64::from_bits(a), Q64x64::from_bits(b));
+            if let (Some(d), Some(u)) = (x.mul(y, D), x.mul(y, U)) {
+                prop_assert!(u.to_bits() >= d.to_bits());
+                prop_assert!(u.to_bits() - d.to_bits() <= 1);
+            }
+        }
+
+        #[test]
+        fn div_rounding_direction(a in any::<u128>(), b in 1u128..=u128::MAX) {
+            let (x, y) = (Q64x64::from_bits(a), Q64x64::from_bits(b));
+            if let (Some(d), Some(u)) = (x.div(y, D), x.div(y, U)) {
+                prop_assert!(u.to_bits() >= d.to_bits());
+                prop_assert!(u.to_bits() - d.to_bits() <= 1);
+            }
+        }
+
+        #[test]
+        fn mul_int_rounding_direction(bits in any::<u128>(), amt in any::<u128>()) {
+            let x = Q64x64::from_bits(bits);
+            if let (Some(d), Some(u)) = (x.mul_int(amt, D), x.mul_int(amt, U)) {
+                prop_assert!(u >= d);
+                prop_assert!(u - d <= 1);
+            }
+        }
+
+        // from_ratio is exact <=> Up equals Down.
+        #[test]
+        fn from_ratio_exactness(a in any::<u128>(), b in 1u128..=u128::MAX) {
+            if let (Some(d), Some(u)) = (
+                Q64x64::from_ratio(a, b, D),
+                Q64x64::from_ratio(a, b, U),
+            ) {
+                let exact = (U256::from(a) << SCALE_OFFSET) % U256::from(b) == U256::ZERO;
+                if exact {
+                    prop_assert_eq!(d, u);
+                } else {
+                    prop_assert_eq!(u.to_bits() - d.to_bits(), 1);
+                }
+            }
+        }
     }
 }
