@@ -17,4 +17,7 @@ pub enum Rounding {
 /// Number of fractional bits in the Q64.64 representation.
 pub const SCALE_OFFSET: u32 = 64;
 
-// TODO(M0): Q64.64 type, U256 mul-div, sqrt, bin-price pow, unit tests.
+mod q64;
+pub use q64::Q64x64;
+
+// TODO(M0): U256 mul-div helpers, sqrt, bin-price pow (separate issues).
