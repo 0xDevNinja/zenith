@@ -85,5 +85,27 @@ mod tests {
         assert_ne!(vault_pda(&pool, &mint).0, pool_authority_pda(&pool).0);
         // different config index -> different config PDA
         assert_ne!(config_pda(1).0, config_pda(2).0);
+        // `position` vs `position_nft` seeds must not collide for the same NFT
+        let nft = Pubkey::new_unique();
+        assert_ne!(position_pda(&nft).0, position_nft_custody_pda(&nft).0);
+    }
+
+    #[test]
+    fn pools_are_unique_per_config_and_mints() {
+        let cfg_a = Pubkey::new_unique();
+        let cfg_b = Pubkey::new_unique();
+        let m_a = Pubkey::new_unique();
+        let m_b = Pubkey::new_unique();
+        let m_c = Pubkey::new_unique();
+        // same mints, different config -> different pool
+        assert_ne!(
+            pool_pda(&cfg_a, &m_a, &m_b).0,
+            pool_pda(&cfg_b, &m_a, &m_b).0
+        );
+        // same config, different mint pair -> different pool
+        assert_ne!(
+            pool_pda(&cfg_a, &m_a, &m_b).0,
+            pool_pda(&cfg_a, &m_a, &m_c).0
+        );
     }
 }

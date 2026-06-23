@@ -40,6 +40,26 @@ impl PoolStatus {
     }
 }
 
+/// Which token program a mint belongs to, stored as a `u8` flag on the pool.
+#[repr(u8)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum TokenFlavor {
+    /// Classic SPL Token program.
+    SplToken = 0,
+    /// Token-2022 (extensions program).
+    Token2022 = 1,
+}
+
+impl TokenFlavor {
+    /// Decode from the stored byte, defaulting unknown values to `SplToken`.
+    pub fn from_u8(v: u8) -> Self {
+        match v {
+            1 => TokenFlavor::Token2022,
+            _ => TokenFlavor::SplToken,
+        }
+    }
+}
+
 #[account(zero_copy)]
 #[repr(C)]
 pub struct Pool {
@@ -90,8 +110,19 @@ pub struct Pool {
     pub status: u8,
     /// Bump for the pool authority PDA.
     pub pool_authority_bump: u8,
+    /// Bump for the pool account's own PDA (cached to avoid re-derivation on
+    /// the swap hot path).
+    pub pool_bump: u8,
+    /// Bump for the token A vault PDA.
+    pub token_a_vault_bump: u8,
+    /// Bump for the token B vault PDA.
+    pub token_b_vault_bump: u8,
+    /// Token program flavor for mint A: 0 = SPL Token, 1 = Token-2022.
+    pub token_a_flags: u8,
+    /// Token program flavor for mint B: 0 = SPL Token, 1 = Token-2022.
+    pub token_b_flags: u8,
     /// Trailing padding to keep the struct 16-byte sized (no Pod padding).
-    pub padding: [u8; 12],
+    pub padding: [u8; 7],
 }
 
 impl Pool {
