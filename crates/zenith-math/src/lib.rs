@@ -5,12 +5,17 @@
 //! - 256-bit intermediates for deltas and fee accumulators
 //! - mul-div with explicit rounding direction
 //!
-//! Implementation lands in milestone M0.
+//! Built incrementally over milestone M0.
 
-/// Rounding direction for fixed-point division.
+/// Rounding direction for a lossy fixed-point operation.
+///
+/// Callers pick the protocol-favoring side explicitly; there is no implicit
+/// default, so money never rounds the wrong way by accident.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Rounding {
+    /// Round toward +∞ (ceil of the exact real result).
     Up,
+    /// Round toward 0 (floor of the exact real result).
     Down,
 }
 
