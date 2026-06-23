@@ -27,7 +27,7 @@ mod q64;
 mod sqrt_price;
 mod u256;
 
-pub use bin_price::{bin_price, pow, MAX_BIN_ID, MAX_BIN_STEP_BPS};
+pub use bin_price::{bin_price, pow, MAX_BIN_STEP_BPS, MAX_PRICE_BITS, MIN_PRICE_BITS};
 pub use q64::Q64x64;
 pub use sqrt_price::{
     delta_a, delta_b, next_sqrt_price_from_amount_x, next_sqrt_price_from_amount_y,
