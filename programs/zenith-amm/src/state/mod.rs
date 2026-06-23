@@ -5,7 +5,7 @@ mod pool;
 mod position;
 
 pub use config::Config;
-pub use pool::{Pool, PoolStatus};
+pub use pool::{Pool, PoolStatus, TokenFlavor};
 pub use position::Position;
 
 #[cfg(test)]
@@ -47,6 +47,26 @@ mod tests {
         assert_eq!(back.status(), PoolStatus::Active);
         assert!(back.is_active());
         assert_eq!(back.config, pool.config);
+    }
+
+    #[test]
+    fn pool_has_no_padding_bytes() {
+        // Filling every byte and casting back must preserve all of them — proves
+        // the struct has zero padding (Pod soundness).
+        let raw = [0xFFu8; core::mem::size_of::<Pool>()];
+        let p: &Pool = bytemuck::from_bytes(&raw);
+        assert_eq!(bytemuck::bytes_of(p), &raw[..]);
+    }
+
+    #[test]
+    fn status_and_flavor_decoding() {
+        assert_eq!(PoolStatus::from_u8(0), PoolStatus::Uninitialized);
+        assert_eq!(PoolStatus::from_u8(1), PoolStatus::Active);
+        assert_eq!(PoolStatus::from_u8(2), PoolStatus::Disabled);
+        assert_eq!(PoolStatus::from_u8(7), PoolStatus::Uninitialized); // unknown -> closed
+        assert_eq!(TokenFlavor::from_u8(0), TokenFlavor::SplToken);
+        assert_eq!(TokenFlavor::from_u8(1), TokenFlavor::Token2022);
+        assert_eq!(TokenFlavor::from_u8(9), TokenFlavor::SplToken);
     }
 
     #[test]
