@@ -8,8 +8,11 @@ license = "MIT"
 [lib]
 crate-type = ["lib"]
 
+# Pinned below 1.18: ruint 1.18 raised its MSRV to rustc 1.90, but the Solana
+# BPF toolchain (platform-tools) ships rustc 1.89, so the program would not
+# build for its target. 1.17 keeps a BPF-compatible MSRV.
 [dependencies]
-ruint = { version = "1", default-features = false }
+ruint = { version = "=1.17.0", default-features = false }
 
 [dev-dependencies]
 proptest = "1"
