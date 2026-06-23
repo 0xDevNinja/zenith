@@ -22,10 +22,12 @@ pub enum Rounding {
 /// Number of fractional bits in the Q64.64 representation.
 pub const SCALE_OFFSET: u32 = 64;
 
+mod bin_price;
 mod q64;
 mod sqrt_price;
 mod u256;
 
+pub use bin_price::{bin_price, pow, MAX_BIN_ID, MAX_BIN_STEP_BPS};
 pub use q64::Q64x64;
 pub use sqrt_price::{
     delta_a, delta_b, next_sqrt_price_from_amount_x, next_sqrt_price_from_amount_y,
@@ -33,4 +35,4 @@ pub use sqrt_price::{
 };
 pub use u256::{mul_div, mul_shr, shl_div, MathError, MathResult};
 
-// TODO(M0): bin-price pow (#11), shared test vectors (#12).
+// TODO(M0): shared test vectors (#12).
