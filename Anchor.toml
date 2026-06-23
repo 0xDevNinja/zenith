@@ -7,7 +7,7 @@ skip-lint = false
 # Program IDs are placeholders — regenerate with `anchor keys sync` after
 # generating program keypairs (`anchor keys list`).
 [programs.devnet]
-zenith_amm = "Zen1AMMpLACEHODLERpLACEHODLERpLACEHODLER111"
+zenith_amm = "AA8cKcHQj63GEHRaLrrT87W1efRZ44U147JTCXC2Rmkq"
 zenith_dlmm = "Zen1DLMMpLACEHODLERpLACEHODLERpLACEHODLER11"
 
 [registry]
