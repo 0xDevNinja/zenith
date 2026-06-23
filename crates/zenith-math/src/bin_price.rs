@@ -93,8 +93,14 @@ mod tests {
         assert_eq!(pow(two, 3, D).unwrap(), Q64x64::from_int(8));
         assert_eq!(pow(two, 10, D).unwrap(), Q64x64::from_int(1024));
         // negative exponent -> reciprocal
-        assert_eq!(pow(two, -1, D).unwrap(), Q64x64::from_ratio(1, 2, D).unwrap());
-        assert_eq!(pow(two, -3, D).unwrap(), Q64x64::from_ratio(1, 8, D).unwrap());
+        assert_eq!(
+            pow(two, -1, D).unwrap(),
+            Q64x64::from_ratio(1, 2, D).unwrap()
+        );
+        assert_eq!(
+            pow(two, -3, D).unwrap(),
+            Q64x64::from_ratio(1, 8, D).unwrap()
+        );
         // overflow -> None  (2^64 has bits 2^128)
         assert_eq!(pow(two, 64, D), None);
     }
@@ -120,9 +126,15 @@ mod tests {
     fn bin_price_known_values() {
         // bin_step = 100% -> base = 2.0
         assert_eq!(bin_price(10_000, 3, D).unwrap(), Q64x64::from_int(8));
-        assert_eq!(bin_price(10_000, -1, D).unwrap(), Q64x64::from_ratio(1, 2, D).unwrap());
+        assert_eq!(
+            bin_price(10_000, -1, D).unwrap(),
+            Q64x64::from_ratio(1, 2, D).unwrap()
+        );
         // bin_step = 50% -> base = 1.5; 1.5^2 = 2.25 = 9/4 (exact)
-        assert_eq!(bin_price(5_000, 2, D).unwrap(), Q64x64::from_ratio(9, 4, D).unwrap());
+        assert_eq!(
+            bin_price(5_000, 2, D).unwrap(),
+            Q64x64::from_ratio(9, 4, D).unwrap()
+        );
     }
 
     #[test]
@@ -145,7 +157,7 @@ mod tests {
         // ids whose price leaves the band -> None (concrete, not tautological)
         assert_eq!(bin_price(25, 9_000, D), None); // > 2^32
         assert_eq!(bin_price(25, -9_000, D), None); // < 2^-32
-        // i32 extremes never panic, just None
+                                                    // i32 extremes never panic, just None
         assert_eq!(bin_price(1, i32::MIN, D), None);
         assert_eq!(bin_price(1, i32::MAX, D), None);
     }
@@ -184,7 +196,10 @@ mod tests {
         // base^a * base^b == base^(a+b) within a few ulps (rounding accumulates).
         let base = Q64x64::from_ratio(10_025, 10_000, D).unwrap(); // 1.0025
         for (a, b) in [(3, 4), (10, 7), (20, 13)] {
-            let lhs = pow(base, a, D).unwrap().mul(pow(base, b, D).unwrap(), D).unwrap();
+            let lhs = pow(base, a, D)
+                .unwrap()
+                .mul(pow(base, b, D).unwrap(), D)
+                .unwrap();
             let rhs = pow(base, a + b, D).unwrap();
             let diff = lhs.to_bits().abs_diff(rhs.to_bits());
             assert!(diff <= 4, "a={a} b={b} diff={diff}");

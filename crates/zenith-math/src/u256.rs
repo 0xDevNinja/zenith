@@ -134,7 +134,10 @@ mod tests {
         // (2^127) * 2 / 4 = 2^126 -> fits, and only works via 256-bit intermediate
         assert_eq!(mul_div(1u128 << 127, 2, 4, D).unwrap(), 1u128 << 126);
         // MAX * MAX / MAX == MAX (intermediate is 256-bit)
-        assert_eq!(mul_div(u128::MAX, u128::MAX, u128::MAX, D).unwrap(), u128::MAX);
+        assert_eq!(
+            mul_div(u128::MAX, u128::MAX, u128::MAX, D).unwrap(),
+            u128::MAX
+        );
     }
 
     #[test]

@@ -113,7 +113,9 @@ impl Q64x64 {
     #[inline]
     pub fn mul(self, rhs: Self, rounding: Rounding) -> Option<Self> {
         // (a/2^64) * (b/2^64) = (a*b)/2^128, stored as bits = (a*b) >> 64.
-        mul_shr(self.0, rhs.0, SCALE_OFFSET, rounding).ok().map(Self)
+        mul_shr(self.0, rhs.0, SCALE_OFFSET, rounding)
+            .ok()
+            .map(Self)
     }
 
     /// Divide `self / rhs`, rounded as requested.
@@ -121,7 +123,9 @@ impl Q64x64 {
     #[inline]
     pub fn div(self, rhs: Self, rounding: Rounding) -> Option<Self> {
         // bits = (a << 64) / b
-        shl_div(self.0, SCALE_OFFSET, rhs.0, rounding).ok().map(Self)
+        shl_div(self.0, SCALE_OFFSET, rhs.0, rounding)
+            .ok()
+            .map(Self)
     }
 
     /// Reciprocal `1 / self`, rounded as requested.
@@ -129,7 +133,9 @@ impl Q64x64 {
     #[inline]
     pub fn recip(self, rounding: Rounding) -> Option<Self> {
         // bits = 2^128 / self = (1 << 128) / self
-        shl_div(1, 2 * SCALE_OFFSET, self.0, rounding).ok().map(Self)
+        shl_div(1, 2 * SCALE_OFFSET, self.0, rounding)
+            .ok()
+            .map(Self)
     }
 
     // --- token-amount conversions ---
