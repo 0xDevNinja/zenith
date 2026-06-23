@@ -24,7 +24,8 @@ use crate::{shl_div, Q64x64, Rounding, SCALE_OFFSET};
 /// Floored integer square root of a `U256` (`floor(sqrt(x))`).
 ///
 /// Deterministic Newton iteration from a power-of-two over-estimate. The result
-/// always fits `u128` because `sqrt(2^256 - 1) < 2^128`.
+/// always fits `u128`: `floor(sqrt(2^256 - 1)) = 2^128 - 1`, exactly the u128
+/// ceiling.
 pub fn sqrt_u256(x: U256) -> U256 {
     if x.is_zero() {
         return U256::ZERO;
@@ -63,7 +64,10 @@ pub fn sqrt_price_from_price(num: u128, den: u128) -> Option<Q64x64> {
 
 /// Price ratio (Q64.64) implied by a `sqrt_price`: `price = sqrt_price^2`.
 ///
-/// `bits = (sp^2) >> 64`. Returns `None` if the price exceeds `u128`.
+/// `bits = (sp^2) >> 64`. This is a pure conversion with no inherent
+/// pool/trader side, so the caller picks `rounding` to match its use-site
+/// (round the value the way that favors the pool for that context). Returns
+/// `None` if the price exceeds `u128`.
 pub fn price_from_sqrt_price(sqrt_price: Q64x64, rounding: Rounding) -> Option<Q64x64> {
     crate::mul_shr(sqrt_price.to_bits(), sqrt_price.to_bits(), SCALE_OFFSET, rounding)
         .ok()
@@ -111,14 +115,17 @@ pub fn delta_b(
 /// `amount` of token `x` (base / amount0). Adding `x` lowers the price.
 ///
 /// `sp' = L * sp * 2^64 / (L * 2^64 ± amount * sp)` (`+` for add, `-` for remove).
-/// Round **up** to keep the price conservative for the pool. Returns `None` on
-/// overflow, zero liquidity, or a removal that would empty the range.
+///
+/// Rounding is **not** a caller choice: the price is always rounded **up**,
+/// which is the protocol-favoring direction for both branches (less `y` out on
+/// add, more `y` charged on remove), so rounding can never leak value to the
+/// trader. Returns `None` on overflow, zero liquidity, or a removal that would
+/// empty the range.
 pub fn next_sqrt_price_from_amount_x(
     sqrt_price: Q64x64,
     liquidity: u128,
     amount: u128,
     add: bool,
-    rounding: Rounding,
 ) -> Option<Q64x64> {
     if liquidity == 0 {
         return None;
@@ -128,38 +135,37 @@ pub fn next_sqrt_price_from_amount_x(
     let product = U512::from(amount) * sp;
     let l_shifted = l << SCALE_OFFSET; // L * 2^64
     let den = if add {
-        l_shifted + product
+        l_shifted + product // >= 2^64 > 0
     } else {
         if l_shifted <= product {
             return None; // price would hit zero or invert
         }
-        l_shifted - product
+        l_shifted - product // > 0 by the guard above
     };
-    if den.is_zero() {
-        return None;
-    }
     let num = (l * sp) << SCALE_OFFSET; // L * sp * 2^64
-    narrow_512(div_round_512(num, den, rounding)).map(Q64x64::from_bits)
+    narrow_512(div_round_512(num, den, Rounding::Up)).map(Q64x64::from_bits)
 }
 
 /// Next `sqrt_price` after adding (`add = true`) or removing (`add = false`)
 /// `amount` of token `y` (quote / amount1). Adding `y` raises the price.
 ///
-/// `sp' = sp ± (amount << 64) / L`. Round **down** to keep the price
-/// conservative for the pool. Returns `None` on overflow or zero liquidity, or
-/// a removal that would drive the price below zero.
+/// `sp' = sp ± (amount << 64) / L`.
+///
+/// Rounding is chosen internally per branch to favor the pool: **down** on add
+/// (the price rises less, so less `x` out) and **up** on remove (the price
+/// falls more, so more `x` charged). Returns `None` on overflow or zero
+/// liquidity, or a removal that would drive the price below zero.
 pub fn next_sqrt_price_from_amount_y(
     sqrt_price: Q64x64,
     liquidity: u128,
     amount: u128,
     add: bool,
-    rounding: Rounding,
 ) -> Option<Q64x64> {
     if liquidity == 0 {
         return None;
     }
-    let delta = shl_div(amount, SCALE_OFFSET, liquidity, rounding).ok()?;
-    let delta = Q64x64::from_bits(delta);
+    let rounding = if add { Rounding::Down } else { Rounding::Up };
+    let delta = Q64x64::from_bits(shl_div(amount, SCALE_OFFSET, liquidity, rounding).ok()?);
     if add {
         sqrt_price.checked_add(delta)
     } else {
@@ -276,26 +282,71 @@ mod tests {
         // sp = 1.0, L = 1000, add 1000 y: delta = (1000<<64)/1000 = 2^64,
         // sp' = 1 + 1 = 2.0.
         let sp = one();
-        let up = next_sqrt_price_from_amount_y(sp, 1000, 1000, true, D).unwrap();
+        let up = next_sqrt_price_from_amount_y(sp, 1000, 1000, true).unwrap();
         assert_eq!(up.to_bits(), 2u128 << 64);
         // removing the same amount returns to 1.0.
-        let down = next_sqrt_price_from_amount_y(up, 1000, 1000, false, D).unwrap();
+        let down = next_sqrt_price_from_amount_y(up, 1000, 1000, false).unwrap();
         assert_eq!(down, one());
         // removing more than available -> None.
-        assert_eq!(next_sqrt_price_from_amount_y(sp, 1000, 5000, false, D), None);
+        assert_eq!(next_sqrt_price_from_amount_y(sp, 1000, 5000, false), None);
         // zero liquidity -> None.
-        assert_eq!(next_sqrt_price_from_amount_y(sp, 0, 1, true, D), None);
+        assert_eq!(next_sqrt_price_from_amount_y(sp, 0, 1, true), None);
+        // amount 0 is identity on both branches.
+        assert_eq!(next_sqrt_price_from_amount_y(sp, 1000, 0, true).unwrap(), sp);
+        assert_eq!(next_sqrt_price_from_amount_y(sp, 1000, 0, false).unwrap(), sp);
     }
 
     #[test]
-    fn next_price_amount_x_matches_delta() {
+    fn next_price_amount_y_rounding_favors_pool() {
+        // amount/L does not divide evenly, so the delta has a remainder.
+        // add -> round delta DOWN -> sp' as low as possible (less x out).
+        // remove -> round delta UP -> sp' as low as possible (more x charged).
+        let sp = Q64x64::from_bits(10u128 << 64); // 10.0, headroom for both
+        let raw = shl_div(700, SCALE_OFFSET, 999, Rounding::Down).unwrap();
+        let raw_up = shl_div(700, SCALE_OFFSET, 999, Rounding::Up).unwrap();
+        assert_eq!(raw_up - raw, 1); // genuinely inexact
+        // add uses the floored delta
+        let add = next_sqrt_price_from_amount_y(sp, 999, 700, true).unwrap();
+        assert_eq!(add.to_bits(), sp.to_bits() + raw);
+        // remove uses the ceiled delta -> strictly lower sp' than a Down would give
+        let rem = next_sqrt_price_from_amount_y(sp, 999, 700, false).unwrap();
+        assert_eq!(rem.to_bits(), sp.to_bits() - raw_up);
+        assert!(rem.to_bits() < sp.to_bits() - raw);
+    }
+
+    #[test]
+    fn next_price_amount_x_add_remove() {
         // From the deltas test: at sp_hi = 2.0, adding delta_a (500 x) for
         // L = 1000 should move the price back to sp_lo = 1.0.
         let hi = Q64x64::from_bits(1u128 << 65); // 2.0
-        let got = next_sqrt_price_from_amount_x(hi, 1000, 500, true, D).unwrap();
+        let got = next_sqrt_price_from_amount_x(hi, 1000, 500, true).unwrap();
         assert_eq!(got.to_bits(), 1u128 << 64); // 1.0
-        // zero liquidity / removal-too-large guards.
-        assert_eq!(next_sqrt_price_from_amount_x(hi, 0, 1, true, D), None);
+        // remove branch: removing x raises the price (sp' > sp).
+        let lo = Q64x64::from_bits(1u128 << 64); // 1.0
+        let raised = next_sqrt_price_from_amount_x(lo, 1000, 100, false).unwrap();
+        assert!(raised.to_bits() > lo.to_bits());
+        // removal large enough to empty the range -> None.
+        assert_eq!(next_sqrt_price_from_amount_x(lo, 1000, u128::MAX, false), None);
+        // amount 0 is identity.
+        assert_eq!(next_sqrt_price_from_amount_x(hi, 1000, 0, true).unwrap(), hi);
+        // zero liquidity guard.
+        assert_eq!(next_sqrt_price_from_amount_x(hi, 0, 1, true), None);
+    }
+
+    #[test]
+    fn degenerate_and_overflow_guards() {
+        // zero-width range -> zero deltas.
+        let sp = Q64x64::from_bits(5u128 << 64);
+        assert_eq!(delta_a(1000, sp, sp, D).unwrap(), 0);
+        assert_eq!(delta_b(1000, sp, sp, D).unwrap(), 0);
+        // delta_a with a zero sqrt price -> None.
+        assert_eq!(delta_a(1000, Q64x64::ZERO, sp, D), None);
+        // delta_b across a huge range overflows u128 -> None.
+        let tiny = Q64x64::from_bits(1);
+        let huge = Q64x64::MAX;
+        assert_eq!(delta_b(u128::MAX, tiny, huge, D), None);
+        // price_from_sqrt_price overflow: sp near MAX -> price > u128.
+        assert_eq!(price_from_sqrt_price(Q64x64::MAX, D), None);
     }
 
     proptest! {
@@ -307,6 +358,19 @@ mod tests {
             let z1 = U256::from(z + 1) * U256::from(z + 1);
             prop_assert!(z2 <= U256::from(x));
             prop_assert!(z1 > U256::from(x));
+        }
+
+        // sqrt_u256 floor invariant over the FULL 256-bit range (built from
+        // two u128 limbs). z^2 <= x < (z+1)^2, computed in U512 to avoid
+        // overflow at the top of the range.
+        #[test]
+        fn sqrt_u256_is_floor(hi in any::<u128>(), lo in any::<u128>()) {
+            let x = (U256::from(hi) << 128) | U256::from(lo);
+            let z = sqrt_u256(x);
+            let zx = U512::from(z);
+            let xx = U512::from(x);
+            prop_assert!(zx * zx <= xx);
+            prop_assert!((zx + U512::from(1u128)) * (zx + U512::from(1u128)) > xx);
         }
 
         // delta_a/delta_b rounding stays within one unit and Up >= Down.
