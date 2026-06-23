@@ -25,6 +25,10 @@ pub fn config_pda(index: u16) -> (Pubkey, u8) {
 }
 
 /// Pool PDA for a config and its (unordered) token mints.
+///
+/// Mints are sorted to ascending order before hashing, yielding one canonical
+/// address per unordered pair. `initialize_pool` enforces the same ascending
+/// order on the submitted mints, so the address it creates always matches this.
 pub fn pool_pda(config: &Pubkey, mint_a: &Pubkey, mint_b: &Pubkey) -> (Pubkey, u8) {
     let (m0, m1) = sort_mints(mint_a, mint_b);
     Pubkey::find_program_address(
