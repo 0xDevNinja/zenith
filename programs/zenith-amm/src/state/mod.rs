@@ -49,14 +49,10 @@ mod tests {
         assert_eq!(back.config, pool.config);
     }
 
-    #[test]
-    fn pool_has_no_padding_bytes() {
-        // Filling every byte and casting back must preserve all of them — proves
-        // the struct has zero padding (Pod soundness).
-        let raw = [0xFFu8; core::mem::size_of::<Pool>()];
-        let p: &Pool = bytemuck::from_bytes(&raw);
-        assert_eq!(bytemuck::bytes_of(p), &raw[..]);
-    }
+    // Note: zero padding is guaranteed at compile time — bytemuck's
+    // `#[derive(Pod)]` (emitted by `#[account(zero_copy)]`) fails to compile if
+    // the struct has any padding bytes. So the struct compiling IS the proof; a
+    // runtime all-0xFF cast would additionally have to manage 16-byte alignment.
 
     #[test]
     fn status_and_flavor_decoding() {
