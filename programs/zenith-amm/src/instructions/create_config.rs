@@ -51,8 +51,12 @@ pub fn create_config(
         sqrt_min_price > 0 && sqrt_min_price < sqrt_max_price,
         ZenithError::InvalidPriceBand
     );
+    // base_fee_bps must be strictly below 100%: a swap nets `input * (1 -
+    // base_fee_bps/10000)` and the on-top fee divides by `10000 - base_fee_bps`,
+    // both of which break at exactly 100% (and `compute_swap_step` rejects it),
+    // so a 100% config would silently brick every swap on the pool.
     require!(
-        base_fee_bps <= BPS_DENOMINATOR && protocol_fee_bps <= BPS_DENOMINATOR,
+        base_fee_bps < BPS_DENOMINATOR && protocol_fee_bps <= BPS_DENOMINATOR,
         ZenithError::InvalidFeeConfig
     );
 

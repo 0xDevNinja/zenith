@@ -338,6 +338,11 @@ pub fn split_fee(fee: u64, protocol_fee_bps: u16) -> Result<(u64, u64)> {
 
 /// Per-liquidity fee-growth increment for an LP fee of `lp_fee` tokens spread
 /// over `liquidity`: `lp_fee << 64 / liquidity`, rounded down (Q64.64).
+///
+/// Flooring strands sub-unit-per-liquidity fee dust: those tokens are already in
+/// the vault but go unattributed. This is safe — it favors the pool and the
+/// dust is never withdrawable as liquidity (payouts derive from L/price/growth,
+/// never the raw vault balance) — it just leaves a tiny growing vault surplus.
 pub fn fee_growth_delta(lp_fee: u64, liquidity: u128) -> Result<u128> {
     if lp_fee == 0 || liquidity == 0 {
         return Ok(0);
