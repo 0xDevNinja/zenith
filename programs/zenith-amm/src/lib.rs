@@ -111,4 +111,9 @@ pub mod zenith_amm {
     pub fn claim_position_fee(ctx: Context<ClaimPositionFee>) -> Result<()> {
         instructions::claim_position_fee(ctx)
     }
+
+    /// Close an empty position (burn the NFT, reclaim rent).
+    pub fn close_position(ctx: Context<ClosePosition>) -> Result<()> {
+        instructions::close_position(ctx)
+    }
 }
