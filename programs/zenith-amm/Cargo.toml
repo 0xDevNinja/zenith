@@ -25,6 +25,9 @@ bytemuck = { version = "1", features = ["derive"] }
 
 [dev-dependencies]
 proptest = "1"
+# Available to the fee-engine vector tests (tests/), which need the shared math
+# primitives directly; integration tests don't inherit normal deps.
+zenith-math = { path = "../../crates/zenith-math" }
 # On-chain integration tests live in the separate `amm-integration` crate
 # (tests/amm-integration) so their heavy solana-program-test deps never compile
 # in the `-p zenith-amm` CI path.
