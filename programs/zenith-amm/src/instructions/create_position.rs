@@ -76,6 +76,7 @@ pub fn create_position(ctx: Context<CreatePosition>) -> Result<()> {
 
     // Reject disabled pools, and bump the open-position counter (informational;
     // overflow is unreachable in practice but checked rather than wrapped).
+    let (fee_growth_global_a, fee_growth_global_b);
     {
         let mut pool = ctx.accounts.pool.load_mut()?;
         require!(pool.is_active(), ZenithError::PoolNotActive);
@@ -83,6 +84,10 @@ pub fn create_position(ctx: Context<CreatePosition>) -> Result<()> {
             .position_count
             .checked_add(1)
             .ok_or(ZenithError::MathOverflow)?;
+        // Snapshot the live global fee growth to seed the position's checkpoints
+        // (below), so it cannot claim fees accrued before it existed.
+        fee_growth_global_a = pool.fee_growth_global_a;
+        fee_growth_global_b = pool.fee_growth_global_b;
     }
 
     // Mint the single NFT to the creator (pool authority signs).
@@ -126,8 +131,11 @@ pub fn create_position(ctx: Context<CreatePosition>) -> Result<()> {
     position.liquidity = 0;
     position.vested_liquidity = 0;
     position.permanent_locked_liquidity = 0;
-    position.fee_growth_checkpoint_a = 0;
-    position.fee_growth_checkpoint_b = 0;
+    // Checkpoint at the current global growth so the first fee settlement
+    // credits only fees earned after this position opened (not the pool's
+    // pre-existing accrual).
+    position.fee_growth_checkpoint_a = fee_growth_global_a;
+    position.fee_growth_checkpoint_b = fee_growth_global_b;
     position.fee_pending_a = 0;
     position.fee_pending_b = 0;
     position.bump = ctx.bumps.position;
