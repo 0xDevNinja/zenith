@@ -9,7 +9,10 @@
 
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::{mint_to, transfer, Mint, MintTo, Token, TokenAccount, Transfer};
+use anchor_spl::token::spl_token::instruction::AuthorityType;
+use anchor_spl::token::{
+    mint_to, set_authority, transfer, Mint, MintTo, SetAuthority, Token, TokenAccount, Transfer,
+};
 
 use crate::constants::{POOL_AUTHORITY_SEED, POOL_SEED, POSITION_SEED, VAULT_SEED};
 use crate::errors::ZenithError;
@@ -77,7 +80,6 @@ pub struct InitializePool<'info> {
         payer = creator,
         mint::decimals = 0,
         mint::authority = pool_authority,
-        mint::freeze_authority = pool_authority,
     )]
     pub position_nft_mint: Box<Account<'info, Mint>>,
 
@@ -183,6 +185,21 @@ pub fn initialize_pool(
             &[authority_seeds],
         ),
         1,
+    )?;
+
+    // Permanently revoke mint authority so the supply is locked at 1: the
+    // "hold the NFT (amount == 1)" ownership model can never be diluted.
+    set_authority(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            SetAuthority {
+                current_authority: ctx.accounts.pool_authority.to_account_info(),
+                account_or_mint: ctx.accounts.position_nft_mint.to_account_info(),
+            },
+            &[authority_seeds],
+        ),
+        AuthorityType::MintTokens,
+        None,
     )?;
 
     // Record the pool.

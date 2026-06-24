@@ -9,7 +9,8 @@
 
 use anchor_lang::prelude::*;
 use anchor_spl::associated_token::AssociatedToken;
-use anchor_spl::token::{mint_to, Mint, MintTo, Token, TokenAccount};
+use anchor_spl::token::spl_token::instruction::AuthorityType;
+use anchor_spl::token::{mint_to, set_authority, Mint, MintTo, SetAuthority, Token, TokenAccount};
 
 use crate::constants::{POOL_AUTHORITY_SEED, POSITION_SEED};
 use crate::errors::ZenithError;
@@ -22,6 +23,13 @@ pub struct CreatePosition<'info> {
     pub creator: Signer<'info>,
 
     /// Pool the position belongs to. Mutated to bump `position_count`.
+    ///
+    /// Intentionally only owner/discriminator-checked (no seed/`has_one`): this
+    /// instruction moves no funds, so any genuine Zenith pool is a safe target,
+    /// and the resulting position is bound to whatever pool is passed via
+    /// `position.pool`. Downstream handlers (add/remove liquidity, claim) MUST
+    /// re-verify `position.pool == pool.key()` and that the caller holds the
+    /// position NFT before acting on a position.
     #[account(mut)]
     pub pool: AccountLoader<'info, Pool>,
 
@@ -36,7 +44,6 @@ pub struct CreatePosition<'info> {
         payer = creator,
         mint::decimals = 0,
         mint::authority = pool_authority,
-        mint::freeze_authority = pool_authority,
     )]
     pub position_nft_mint: Box<Account<'info, Mint>>,
 
@@ -67,10 +74,11 @@ pub struct CreatePosition<'info> {
 pub fn create_position(ctx: Context<CreatePosition>) -> Result<()> {
     let pool_key = ctx.accounts.pool.key();
 
-    // Bump the pool's open-position counter (informational; overflow is
-    // unreachable in practice but checked rather than wrapped).
+    // Reject disabled pools, and bump the open-position counter (informational;
+    // overflow is unreachable in practice but checked rather than wrapped).
     {
         let mut pool = ctx.accounts.pool.load_mut()?;
+        require!(pool.is_active(), ZenithError::PoolNotActive);
         pool.position_count = pool
             .position_count
             .checked_add(1)
@@ -94,6 +102,21 @@ pub fn create_position(ctx: Context<CreatePosition>) -> Result<()> {
             &[authority_seeds],
         ),
         1,
+    )?;
+
+    // Permanently revoke mint authority so the supply is locked at 1: the
+    // "hold the NFT (amount == 1)" ownership model can never be diluted.
+    set_authority(
+        CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            SetAuthority {
+                current_authority: ctx.accounts.pool_authority.to_account_info(),
+                account_or_mint: ctx.accounts.position_nft_mint.to_account_info(),
+            },
+            &[authority_seeds],
+        ),
+        AuthorityType::MintTokens,
+        None,
     )?;
 
     // Record the empty position.
