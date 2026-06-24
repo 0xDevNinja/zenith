@@ -212,6 +212,35 @@ mod tests {
     }
 
     #[test]
+    fn position_checkpointed_at_current_growth_earns_nothing_retroactively() {
+        // Mirrors create_position seeding the checkpoint from the pool's live
+        // global growth: a position opened after fees already accrued must not
+        // be credited any of that pre-existing growth on its first settle.
+        let global_a = 5 * ONE;
+        let global_b = 9 * ONE;
+        let mut pos = Position {
+            pool: Pubkey::default(),
+            nft_mint: Pubkey::default(),
+            liquidity: 1_000_000,
+            vested_liquidity: 0,
+            permanent_locked_liquidity: 0,
+            fee_growth_checkpoint_a: global_a, // seeded at creation
+            fee_growth_checkpoint_b: global_b,
+            fee_pending_a: 0,
+            fee_pending_b: 0,
+            bump: 0,
+            reserved: [0u8; 64],
+        };
+        settle_position_fees(&mut pos, global_a, global_b).unwrap();
+        assert_eq!(pos.fee_pending_a, 0);
+        assert_eq!(pos.fee_pending_b, 0);
+        // Only growth after creation is credited.
+        settle_position_fees(&mut pos, global_a + ONE, global_b).unwrap();
+        assert_eq!(pos.fee_pending_a, 1_000_000); // 1e6 * 1.0
+        assert_eq!(pos.fee_pending_b, 0);
+    }
+
+    #[test]
     fn fee_growth_wraps_around() {
         let mut pos = Position {
             pool: Pubkey::default(),
