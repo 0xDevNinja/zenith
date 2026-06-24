@@ -39,6 +39,11 @@ pub mod zenith_amm {
         sqrt_max_price: u128,
         base_fee_bps: u16,
         protocol_fee_bps: u16,
+        fee_scheduler_mode: u8,
+        cliff_fee_bps: u16,
+        reduction_factor: u16,
+        fee_period: u64,
+        max_fee_steps: u16,
     ) -> Result<()> {
         instructions::create_config(
             ctx,
@@ -48,6 +53,13 @@ pub mod zenith_amm {
             sqrt_max_price,
             base_fee_bps,
             protocol_fee_bps,
+            instructions::FeeSchedulerParams {
+                mode: fee_scheduler_mode,
+                cliff_fee_bps,
+                reduction_factor,
+                fee_period,
+                max_fee_steps,
+            },
         )
     }
 

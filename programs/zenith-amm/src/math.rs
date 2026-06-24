@@ -7,7 +7,7 @@
 use anchor_lang::prelude::*;
 use zenith_math::{
     delta_a, delta_b, mul_div, mul_shr, next_sqrt_price_from_amount_x,
-    next_sqrt_price_from_amount_y, Q64x64, Rounding, SCALE_OFFSET,
+    next_sqrt_price_from_amount_y, pow, shl_div, Q64x64, Rounding, SCALE_OFFSET,
 };
 
 use crate::errors::ZenithError;
@@ -15,6 +15,69 @@ use crate::state::Position;
 
 /// Basis-point denominator (100%).
 pub const BPS_DENOMINATOR: u128 = 10_000;
+
+/// Fee scheduler modes (stored as `u8` on the config).
+pub const FEE_MODE_CONSTANT: u8 = 0;
+pub const FEE_MODE_LINEAR: u8 = 1;
+pub const FEE_MODE_EXPONENTIAL: u8 = 2;
+
+/// Current base swap fee (bps) for a scheduler at `elapsed_slots` since pool
+/// creation. `Constant` returns `base_fee_bps`; the decaying modes start at
+/// `cliff_fee_bps` and step down every `fee_period` slots (capped at
+/// `max_fee_steps`), clamped to the `[base_fee_bps, cliff_fee_bps]` band:
+/// - Linear: `cliff - reduction_factor * steps`.
+/// - Exponential: `cliff * (1 - reduction_factor/10000)^steps` (Q64.64).
+///
+/// Output is monotonically non-increasing in `elapsed_slots` and never leaves
+/// the band. Caller validates the params at config creation.
+#[allow(clippy::too_many_arguments)]
+pub fn scheduled_base_fee_bps(
+    mode: u8,
+    base_fee_bps: u16,
+    cliff_fee_bps: u16,
+    reduction_factor: u16,
+    fee_period: u64,
+    max_fee_steps: u16,
+    elapsed_slots: u64,
+) -> Result<u16> {
+    if mode == FEE_MODE_CONSTANT {
+        return Ok(base_fee_bps);
+    }
+
+    let steps = if fee_period == 0 {
+        0
+    } else {
+        (elapsed_slots / fee_period).min(max_fee_steps as u64)
+    };
+    let cliff = cliff_fee_bps as u128;
+    let floor = base_fee_bps as u128;
+
+    let raw = match mode {
+        FEE_MODE_LINEAR => {
+            let dec = (reduction_factor as u128).saturating_mul(steps as u128);
+            cliff.saturating_sub(dec)
+        }
+        FEE_MODE_EXPONENTIAL => {
+            // (1 - reduction/10000) in Q64.64, raised to `steps`.
+            let base_bits = shl_div(
+                BPS_DENOMINATOR - reduction_factor as u128,
+                SCALE_OFFSET,
+                BPS_DENOMINATOR,
+                Rounding::Down,
+            )
+            .map_err(|_| ZenithError::MathOverflow)?;
+            let factor = pow(Q64x64::from_bits(base_bits), steps as i32, Rounding::Down)
+                .ok_or(ZenithError::MathOverflow)?;
+            factor
+                .mul_int(cliff, Rounding::Down)
+                .ok_or(ZenithError::MathOverflow)?
+        }
+        _ => return Err(ZenithError::InvalidFeeConfig.into()),
+    };
+
+    // Decaying modes only ever reduce, but clamp defensively to the band.
+    Ok(raw.clamp(floor, cliff) as u16)
+}
 
 /// Narrow a `u128` math result to a `u64` token amount, erroring on overflow.
 pub fn to_token_amount(x: u128) -> Result<u64> {
@@ -628,6 +691,64 @@ mod tests {
         // growth: lp_fee << 64 / L ; with L = 2^64 the delta is lp_fee.
         assert_eq!(fee_growth_delta(750, ONE).unwrap(), 750);
         assert_eq!(fee_growth_delta(0, ONE).unwrap(), 0);
+    }
+
+    // --- fee scheduler ---
+
+    #[test]
+    fn fee_constant_mode_ignores_time() {
+        for slot in [0u64, 1, 1_000, u64::MAX] {
+            assert_eq!(
+                scheduled_base_fee_bps(FEE_MODE_CONSTANT, 30, 500, 10, 100, 50, slot).unwrap(),
+                30
+            );
+        }
+    }
+
+    #[test]
+    fn fee_linear_steps_down_and_floors() {
+        // start 500, floor 30, -50 bps per 100 slots, cap 8 steps.
+        let f = |slot| scheduled_base_fee_bps(FEE_MODE_LINEAR, 30, 500, 50, 100, 8, slot).unwrap();
+        assert_eq!(f(0), 500); // step 0
+        assert_eq!(f(99), 500); // still step 0
+        assert_eq!(f(100), 450); // step 1
+        assert_eq!(f(500), 250); // step 5
+        assert_eq!(f(800), 100); // step 8 -> 500 - 50*8 = 100
+        assert_eq!(f(900), 100); // step 9 capped at 8 -> still 100
+        assert_eq!(f(100_000), 100); // capped, never drops further
+    }
+
+    #[test]
+    fn fee_linear_clamps_to_floor() {
+        // big reduction quickly crosses the floor; clamp holds it at 30.
+        let f = scheduled_base_fee_bps(FEE_MODE_LINEAR, 30, 500, 200, 100, 50, 1_000).unwrap();
+        assert_eq!(f, 30); // 500 - 200*10 = -1500 -> floor 30
+    }
+
+    #[test]
+    fn fee_exponential_decays_and_is_monotonic() {
+        // start 1000, floor 10, 50% off per period, cap 10 steps.
+        let f = |slot| {
+            scheduled_base_fee_bps(FEE_MODE_EXPONENTIAL, 10, 1000, 5000, 100, 10, slot).unwrap()
+        };
+        assert_eq!(f(0), 1000); // (1)^0
+        assert_eq!(f(100), 500); // *0.5
+        assert_eq!(f(200), 250); // *0.25
+        assert_eq!(f(300), 125);
+        // monotonic non-increasing
+        let mut prev = u16::MAX;
+        for s in (0..1500).step_by(50) {
+            let cur = f(s);
+            assert!(cur <= prev, "not monotonic at slot {s}: {cur} > {prev}");
+            prev = cur;
+        }
+        // deep in time -> clamped to floor.
+        assert_eq!(f(1_000_000), 10);
+    }
+
+    #[test]
+    fn fee_invalid_mode_errors() {
+        assert!(scheduled_base_fee_bps(7, 30, 500, 10, 100, 8, 100).is_err());
     }
 
     proptest! {
