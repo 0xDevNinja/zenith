@@ -15,7 +15,8 @@ use crate::constants::{CONFIG_SEED, POOL_AUTHORITY_SEED};
 use crate::errors::ZenithError;
 use crate::events::Swap as SwapEvent;
 use crate::math::{
-    compute_swap_step, fee_growth_delta, scheduled_base_fee_bps, split_fee, SwapDirection, SwapMode,
+    compute_dynamic_fee, compute_swap_step, fee_growth_delta, scheduled_base_fee_bps, split_fee,
+    SwapDirection, SwapMode, BPS_DENOMINATOR,
 };
 use crate::state::{Config, Pool};
 
@@ -76,6 +77,8 @@ pub fn swap(
     let protocol_fee;
     let amount_remaining;
     let next_sqrt_price;
+    let total_fee_bps_out;
+    let volatility_out;
     {
         let mut pool = ctx.accounts.pool.load_mut()?;
         require!(pool.is_active(), ZenithError::PoolNotActive);
@@ -95,10 +98,10 @@ pub fn swap(
             ZenithError::Unauthorized
         );
 
-        // Current base fee from the config's scheduler, based on how long the
-        // pool has been live (slots since its activation point).
-        let elapsed = Clock::get()?.slot.saturating_sub(pool.activation_point);
+        let now = Clock::get()?.slot;
         let config = &ctx.accounts.config;
+
+        // Base fee from the scheduler (slots since pool activation).
         let base_fee_bps = scheduled_base_fee_bps(
             config.fee_scheduler_mode,
             config.base_fee_bps,
@@ -106,8 +109,30 @@ pub fn swap(
             config.reduction_factor,
             config.fee_period,
             config.max_fee_steps,
-            elapsed,
+            now.saturating_sub(pool.activation_point),
         )?;
+
+        // Dynamic surcharge from the volatility accumulator (decayed by idle
+        // slots, plus the price drift since the anchor). Computed on the
+        // pre-swap price; this swap's own move is captured for the next one.
+        let pre_sqrt_price = pool.sqrt_price;
+        let vol_elapsed = now.saturating_sub(pool.last_volatility_update);
+        let (dynamic_fee_bps, new_va, new_vol_reference) = compute_dynamic_fee(
+            pre_sqrt_price,
+            pool.sqrt_price_reference,
+            pool.volatility_accumulator,
+            vol_elapsed,
+            config.filter_period,
+            config.decay_period,
+            config.volatility_reduction_factor,
+            config.max_volatility_accumulator,
+            config.variable_fee_control,
+            config.max_dynamic_fee_bps,
+        );
+
+        // Total fee, clamped strictly below 100% (compute_swap_step requires it).
+        let total_fee_bps =
+            (base_fee_bps as u32 + dynamic_fee_bps as u32).min(BPS_DENOMINATOR as u32 - 1) as u16;
 
         let step = compute_swap_step(
             pool.sqrt_price,
@@ -117,7 +142,7 @@ pub fn swap(
             direction,
             mode,
             amount,
-            base_fee_bps,
+            total_fee_bps,
         )?;
         require!(step.amount_out > 0, ZenithError::ZeroAmount);
 
@@ -156,12 +181,23 @@ pub fn swap(
         }
         pool.sqrt_price = step.next_sqrt_price;
 
+        // Persist the volatility state for the next swap; re-anchor the price
+        // when the filter window has elapsed (start of a new volatility window).
+        pool.volatility_accumulator = new_va;
+        pool.volatility_reference = new_vol_reference;
+        pool.last_volatility_update = now;
+        if vol_elapsed >= config.filter_period as u64 {
+            pool.sqrt_price_reference = pre_sqrt_price;
+        }
+
         amount_in = step.amount_in;
         amount_out = step.amount_out;
         fee = step.fee;
         protocol_fee = protocol_share;
         amount_remaining = step.amount_remaining;
         next_sqrt_price = step.next_sqrt_price;
+        total_fee_bps_out = total_fee_bps;
+        volatility_out = new_va;
     }
 
     // Token in -> vault; vault -> token out (chosen by direction).
@@ -218,6 +254,8 @@ pub fn swap(
         protocol_fee,
         amount_remaining,
         sqrt_price: next_sqrt_price,
+        total_fee_bps: total_fee_bps_out,
+        volatility_accumulator: volatility_out,
     });
     Ok(())
 }

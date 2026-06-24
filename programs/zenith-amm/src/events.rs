@@ -102,6 +102,10 @@ pub struct Swap {
     pub amount_remaining: u64,
     /// Pool sqrt-price after the swap (Q64.64 raw bits).
     pub sqrt_price: u128,
+    /// Total fee rate applied (base + dynamic), bps.
+    pub total_fee_bps: u16,
+    /// Volatility accumulator after the swap.
+    pub volatility_accumulator: u128,
 }
 
 /// Emitted when liquidity is removed from a position.

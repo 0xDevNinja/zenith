@@ -21,6 +21,90 @@ pub const FEE_MODE_CONSTANT: u8 = 0;
 pub const FEE_MODE_LINEAR: u8 = 1;
 pub const FEE_MODE_EXPONENTIAL: u8 = 2;
 
+/// Denominator for the dynamic-fee formula `dynamic = va^2 * control / 1e9`.
+pub const DYNAMIC_FEE_DENOMINATOR: u128 = 1_000_000_000;
+
+/// Relative price move vs the volatility anchor, in basis points:
+/// `|sqrt_now - sqrt_ref| * 10000 / sqrt_ref`. Returns 0 if no anchor is set.
+pub fn price_move_bps(sqrt_ref: u128, sqrt_now: u128) -> u128 {
+    if sqrt_ref == 0 {
+        return 0;
+    }
+    let diff = sqrt_now.abs_diff(sqrt_ref);
+    mul_div(diff, BPS_DENOMINATOR, sqrt_ref, Rounding::Down).unwrap_or(u128::MAX)
+}
+
+/// Decay the stored accumulator by idle time into the reference the next swap
+/// builds on: unchanged within the filter window, scaled by
+/// `reduction_factor_bps` between filter and decay, fully reset past decay.
+pub fn decayed_volatility_reference(
+    accumulator: u128,
+    elapsed: u64,
+    filter_period: u32,
+    decay_period: u32,
+    reduction_factor_bps: u16,
+) -> u128 {
+    if elapsed >= decay_period as u64 {
+        0
+    } else if elapsed >= filter_period as u64 {
+        mul_div(
+            accumulator,
+            reduction_factor_bps as u128,
+            BPS_DENOMINATOR,
+            Rounding::Down,
+        )
+        .unwrap_or(0)
+    } else {
+        accumulator
+    }
+}
+
+/// New accumulator after a price move: `reference + move`, capped at `max_va`.
+pub fn accumulate_volatility(reference: u128, move_bps: u128, max_va: u32) -> u128 {
+    reference.saturating_add(move_bps).min(max_va as u128)
+}
+
+/// Dynamic surcharge in bps: `va^2 * control / 1e9`, capped at `max_dynamic`.
+/// Zero `control` disables it.
+pub fn dynamic_fee_bps(va: u128, variable_fee_control: u32, max_dynamic_fee_bps: u16) -> u16 {
+    if variable_fee_control == 0 {
+        return 0;
+    }
+    let sq = va.saturating_mul(va);
+    let fee = sq.saturating_mul(variable_fee_control as u128) / DYNAMIC_FEE_DENOMINATOR;
+    fee.min(max_dynamic_fee_bps as u128) as u16
+}
+
+/// One-shot dynamic-fee computation for a swap. Decays the stored accumulator,
+/// adds the price move since the anchor, and derives the surcharge. Returns
+/// `(dynamic_fee_bps, new_accumulator, decayed_reference)`. The caller persists
+/// the new accumulator/reference and decides whether to re-anchor the price.
+#[allow(clippy::too_many_arguments)]
+pub fn compute_dynamic_fee(
+    sqrt_price: u128,
+    sqrt_price_reference: u128,
+    accumulator: u128,
+    elapsed: u64,
+    filter_period: u32,
+    decay_period: u32,
+    reduction_factor_bps: u16,
+    max_va: u32,
+    variable_fee_control: u32,
+    max_dynamic_fee_bps: u16,
+) -> (u16, u128, u128) {
+    let reference = decayed_volatility_reference(
+        accumulator,
+        elapsed,
+        filter_period,
+        decay_period,
+        reduction_factor_bps,
+    );
+    let move_bps = price_move_bps(sqrt_price_reference, sqrt_price);
+    let va = accumulate_volatility(reference, move_bps, max_va);
+    let fee = dynamic_fee_bps(va, variable_fee_control, max_dynamic_fee_bps);
+    (fee, va, reference)
+}
+
 /// Current base swap fee (bps) for a scheduler at `elapsed_slots` since pool
 /// creation. `Constant` returns `base_fee_bps`; the decaying modes start at
 /// `cliff_fee_bps` and step down every `fee_period` slots (capped at
@@ -749,6 +833,68 @@ mod tests {
     #[test]
     fn fee_invalid_mode_errors() {
         assert!(scheduled_base_fee_bps(7, 30, 500, 10, 100, 8, 100).is_err());
+    }
+
+    // --- dynamic (volatility) fee ---
+
+    #[test]
+    fn price_move_is_relative_bps() {
+        // +10% move on the sqrt price = 1000 bps.
+        assert_eq!(price_move_bps(100 * ONE, 110 * ONE), 1000);
+        // symmetric on the way down.
+        assert_eq!(price_move_bps(100 * ONE, 90 * ONE), 1000);
+        // no anchor -> 0 (avoids div by zero).
+        assert_eq!(price_move_bps(0, 100 * ONE), 0);
+    }
+
+    #[test]
+    fn volatility_decays_with_idle_time() {
+        let va = 10_000u128;
+        // within filter window -> unchanged.
+        assert_eq!(decayed_volatility_reference(va, 5, 10, 100, 5000), va);
+        // between filter and decay -> scaled by reduction factor (50%).
+        assert_eq!(decayed_volatility_reference(va, 50, 10, 100, 5000), 5_000);
+        // past decay -> fully reset.
+        assert_eq!(decayed_volatility_reference(va, 200, 10, 100, 5000), 0);
+    }
+
+    #[test]
+    fn volatility_accumulates_and_caps() {
+        assert_eq!(accumulate_volatility(1_000, 500, 100_000), 1_500);
+        // capped at max_va.
+        assert_eq!(accumulate_volatility(90_000, 50_000, 100_000), 100_000);
+    }
+
+    #[test]
+    fn dynamic_fee_rises_with_volatility_and_clamps() {
+        // control chosen so va=1000 -> 1000^2 * 1000 / 1e9 = 1 bps.
+        let f = |va| dynamic_fee_bps(va, 1_000, 500);
+        assert_eq!(f(0), 0);
+        assert_eq!(f(1_000), 1);
+        assert_eq!(f(10_000), 100); // 1e8 * 1e3 / 1e9 = 100
+                                    // grows quadratically, then clamps to max_dynamic (500).
+        assert_eq!(f(30_000), 500); // 9e8*1e3/1e9 = 900 -> clamp 500
+                                    // zero control disables.
+        assert_eq!(dynamic_fee_bps(50_000, 0, 500), 0);
+    }
+
+    #[test]
+    fn compute_dynamic_fee_spike_then_calm() {
+        // params: filter 10, decay 100, reduction 50%, max_va 100k, control 1000, max 500.
+        let p = |sqrt_now, sqrt_ref, acc, elapsed| {
+            compute_dynamic_fee(
+                sqrt_now, sqrt_ref, acc, elapsed, 10, 100, 5000, 100_000, 1_000, 500,
+            )
+        };
+        // Calm: price at anchor, no prior vol -> 0 fee.
+        let (fee, va, _) = p(100 * ONE, 100 * ONE, 0, 5);
+        assert_eq!((fee, va), (0, 0));
+        // Spike: +10% (1000 bps) move within filter window -> va=1000, fee=1.
+        let (fee, va, _) = p(110 * ONE, 100 * ONE, 0, 5);
+        assert_eq!((fee, va), (1, 1000));
+        // Idle past decay -> reference resets, so even a move starts fresh.
+        let (_, _, reference) = p(110 * ONE, 100 * ONE, 50_000, 200);
+        assert_eq!(reference, 0);
     }
 
     proptest! {

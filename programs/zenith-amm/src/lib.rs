@@ -44,6 +44,12 @@ pub mod zenith_amm {
         reduction_factor: u16,
         fee_period: u64,
         max_fee_steps: u16,
+        variable_fee_control: u32,
+        max_volatility_accumulator: u32,
+        filter_period: u32,
+        decay_period: u32,
+        volatility_reduction_factor: u16,
+        max_dynamic_fee_bps: u16,
     ) -> Result<()> {
         instructions::create_config(
             ctx,
@@ -59,6 +65,14 @@ pub mod zenith_amm {
                 reduction_factor,
                 fee_period,
                 max_fee_steps,
+            },
+            instructions::DynamicFeeParams {
+                variable_fee_control,
+                max_volatility_accumulator,
+                filter_period,
+                decay_period,
+                volatility_reduction_factor,
+                max_dynamic_fee_bps,
             },
         )
     }

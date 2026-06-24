@@ -76,8 +76,17 @@ pub struct Pool {
     pub fee_growth_global_a: u128,
     /// Global fee growth per unit of liquidity, token B (Q64.64 raw bits).
     pub fee_growth_global_b: u128,
-    /// Reserved 16-byte fields (e.g. M1b dynamic-fee accumulators).
-    pub reserved_u128: [u128; 4],
+    /// Anchor price for the volatility window (sqrt price, Q64.64 raw bits).
+    /// Price moves are measured relative to this; reset when the filter period
+    /// elapses. Initialized to the pool's opening price.
+    pub sqrt_price_reference: u128,
+    /// Volatility accumulator: grows with price moves, decays over idle slots.
+    pub volatility_accumulator: u128,
+    /// Decayed accumulator carried into the next swap (the base each swap adds
+    /// the new price move onto).
+    pub volatility_reference: u128,
+    /// Reserved 16-byte fields.
+    pub reserved_u128: [u128; 1],
 
     // --- 1-byte aligned (Pubkey = [u8; 32]) ---
     /// Config this pool was created from.
@@ -100,8 +109,10 @@ pub struct Pool {
     pub activation_point: u64,
     /// Number of open positions (informational).
     pub position_count: u64,
+    /// Slot of the last volatility-accumulator update.
+    pub last_volatility_update: u64,
     /// Reserved 8-byte fields.
-    pub reserved_u64: [u64; 8],
+    pub reserved_u64: [u64; 7],
 
     // --- small ---
     /// Informational snapshot of the config's `base_fee_bps` at creation (the

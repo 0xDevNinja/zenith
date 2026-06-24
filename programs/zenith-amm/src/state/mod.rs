@@ -79,9 +79,15 @@ mod tests {
             cliff_fee_bps: 0,
             reduction_factor: 0,
             max_fee_steps: 0,
+            variable_fee_control: 0,
+            max_volatility_accumulator: 0,
+            filter_period: 0,
+            decay_period: 0,
+            volatility_reduction_factor: 0,
+            max_dynamic_fee_bps: 0,
             fee_scheduler_mode: 0,
             bump: 251,
-            reserved: [0u8; 48],
+            reserved: [0u8; 28],
         };
         let bytes = c.try_to_vec().unwrap();
         let back = Config::try_from_slice(&bytes).unwrap();

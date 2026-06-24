@@ -216,12 +216,17 @@ pub fn initialize_pool(
         pool.sqrt_max_price = config.sqrt_max_price;
         pool.fee_growth_global_a = 0;
         pool.fee_growth_global_b = 0;
-        pool.reserved_u128 = [0u128; 4];
+        // Volatility starts calm, anchored at the opening price.
+        pool.sqrt_price_reference = sqrt_price;
+        pool.volatility_accumulator = 0;
+        pool.volatility_reference = 0;
+        pool.reserved_u128 = [0u128; 1];
         pool.protocol_fee_a = 0;
         pool.protocol_fee_b = 0;
         pool.activation_point = Clock::get()?.slot;
         pool.position_count = 1;
-        pool.reserved_u64 = [0u64; 8];
+        pool.last_volatility_update = Clock::get()?.slot;
+        pool.reserved_u64 = [0u64; 7];
         pool.base_fee_bps = config.base_fee_bps;
         pool.status = PoolStatus::Active as u8;
         pool.pool_authority_bump = ctx.bumps.pool_authority;
