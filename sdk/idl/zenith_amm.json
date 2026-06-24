@@ -1,0 +1,192 @@
+{
+  "address": "AA8cKcHQj63GEHRaLrrT87W1efRZ44U147JTCXC2Rmkq",
+  "metadata": {
+    "name": "zenith_amm",
+    "version": "0.1.0",
+    "description": "Zenith concentrated-liquidity AMM",
+    "spec": "zenith-sdk-0.1"
+  },
+  "seeds": {
+    "config": "config",
+    "pool": "pool",
+    "poolAuthority": "pool_authority",
+    "vault": "vault",
+    "position": "position",
+    "positionNft": "position_nft"
+  },
+  "instructions": [
+    {
+      "name": "createConfig",
+      "args": [
+        { "name": "index", "type": "u16" },
+        { "name": "feeAuthority", "type": "pubkey" },
+        { "name": "sqrtMinPrice", "type": "u128" },
+        { "name": "sqrtMaxPrice", "type": "u128" },
+        { "name": "baseFeeBps", "type": "u16" },
+        { "name": "protocolFeeBps", "type": "u16" },
+        { "name": "partner", "type": "pubkey" },
+        { "name": "partnerFeeBps", "type": "u16" },
+        { "name": "feeSchedulerMode", "type": "u8" },
+        { "name": "cliffFeeBps", "type": "u16" },
+        { "name": "reductionFactor", "type": "u16" },
+        { "name": "feePeriod", "type": "u64" },
+        { "name": "maxFeeSteps", "type": "u16" },
+        { "name": "variableFeeControl", "type": "u32" },
+        { "name": "maxVolatilityAccumulator", "type": "u32" },
+        { "name": "filterPeriod", "type": "u32" },
+        { "name": "decayPeriod", "type": "u32" },
+        { "name": "volatilityReductionFactor", "type": "u16" },
+        { "name": "maxDynamicFeeBps", "type": "u16" }
+      ]
+    },
+    {
+      "name": "initializePool",
+      "args": [
+        { "name": "sqrtPrice", "type": "u128" },
+        { "name": "liquidity", "type": "u128" },
+        { "name": "tokenAMax", "type": "u64" },
+        { "name": "tokenBMax", "type": "u64" }
+      ]
+    },
+    { "name": "createPosition", "args": [] },
+    {
+      "name": "addLiquidity",
+      "args": [
+        { "name": "liquidityDelta", "type": "u128" },
+        { "name": "tokenAMax", "type": "u64" },
+        { "name": "tokenBMax", "type": "u64" }
+      ]
+    },
+    {
+      "name": "removeLiquidity",
+      "args": [
+        { "name": "liquidityDelta", "type": "u128" },
+        { "name": "tokenAMin", "type": "u64" },
+        { "name": "tokenBMin", "type": "u64" }
+      ]
+    },
+    {
+      "name": "removeAllLiquidity",
+      "args": [
+        { "name": "tokenAMin", "type": "u64" },
+        { "name": "tokenBMin", "type": "u64" }
+      ]
+    },
+    {
+      "name": "swap",
+      "args": [
+        { "name": "direction", "type": { "defined": "SwapDirection" } },
+        { "name": "mode", "type": { "defined": "SwapMode" } },
+        { "name": "amount", "type": "u64" },
+        { "name": "otherAmountThreshold", "type": "u64" }
+      ]
+    },
+    { "name": "claimPositionFee", "args": [] },
+    { "name": "claimProtocolFee", "args": [] },
+    { "name": "claimPartnerFee", "args": [] },
+    {
+      "name": "setPositionCompounding",
+      "args": [{ "name": "enabled", "type": "bool" }]
+    },
+    { "name": "closePosition", "args": [] }
+  ],
+  "types": [
+    {
+      "name": "SwapDirection",
+      "type": { "kind": "enum", "variants": [{ "name": "AToB" }, { "name": "BToA" }] }
+    },
+    {
+      "name": "SwapMode",
+      "type": {
+        "kind": "enum",
+        "variants": [{ "name": "ExactIn" }, { "name": "ExactOut" }, { "name": "PartialFill" }]
+      }
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Pool",
+      "encoding": "zeroCopy",
+      "fields": [
+        { "name": "liquidity", "type": "u128" },
+        { "name": "sqrtPrice", "type": "u128" },
+        { "name": "sqrtMinPrice", "type": "u128" },
+        { "name": "sqrtMaxPrice", "type": "u128" },
+        { "name": "feeGrowthGlobalA", "type": "u128" },
+        { "name": "feeGrowthGlobalB", "type": "u128" },
+        { "name": "sqrtPriceReference", "type": "u128" },
+        { "name": "volatilityAccumulator", "type": "u128" },
+        { "name": "volatilityReference", "type": "u128" },
+        { "name": "reservedU128", "type": { "array": ["u128", 1] } },
+        { "name": "config", "type": "pubkey" },
+        { "name": "tokenAMint", "type": "pubkey" },
+        { "name": "tokenBMint", "type": "pubkey" },
+        { "name": "tokenAVault", "type": "pubkey" },
+        { "name": "tokenBVault", "type": "pubkey" },
+        { "name": "protocolFeeA", "type": "u64" },
+        { "name": "protocolFeeB", "type": "u64" },
+        { "name": "activationPoint", "type": "u64" },
+        { "name": "positionCount", "type": "u64" },
+        { "name": "lastVolatilityUpdate", "type": "u64" },
+        { "name": "partnerFeeA", "type": "u64" },
+        { "name": "partnerFeeB", "type": "u64" },
+        { "name": "reservedU64", "type": { "array": ["u64", 5] } },
+        { "name": "baseFeeBps", "type": "u16" },
+        { "name": "status", "type": "u8" },
+        { "name": "poolAuthorityBump", "type": "u8" },
+        { "name": "poolBump", "type": "u8" },
+        { "name": "tokenAVaultBump", "type": "u8" },
+        { "name": "tokenBVaultBump", "type": "u8" },
+        { "name": "tokenAFlags", "type": "u8" },
+        { "name": "tokenBFlags", "type": "u8" },
+        { "name": "padding", "type": { "array": ["u8", 7] } }
+      ]
+    },
+    {
+      "name": "Position",
+      "encoding": "borsh",
+      "fields": [
+        { "name": "pool", "type": "pubkey" },
+        { "name": "nftMint", "type": "pubkey" },
+        { "name": "liquidity", "type": "u128" },
+        { "name": "vestedLiquidity", "type": "u128" },
+        { "name": "permanentLockedLiquidity", "type": "u128" },
+        { "name": "feeGrowthCheckpointA", "type": "u128" },
+        { "name": "feeGrowthCheckpointB", "type": "u128" },
+        { "name": "feePendingA", "type": "u64" },
+        { "name": "feePendingB", "type": "u64" },
+        { "name": "bump", "type": "u8" },
+        { "name": "compounding", "type": "u8" },
+        { "name": "reserved", "type": { "array": ["u8", 63] } }
+      ]
+    },
+    {
+      "name": "Config",
+      "encoding": "borsh",
+      "fields": [
+        { "name": "admin", "type": "pubkey" },
+        { "name": "feeAuthority", "type": "pubkey" },
+        { "name": "partner", "type": "pubkey" },
+        { "name": "sqrtMinPrice", "type": "u128" },
+        { "name": "sqrtMaxPrice", "type": "u128" },
+        { "name": "feePeriod", "type": "u64" },
+        { "name": "index", "type": "u16" },
+        { "name": "baseFeeBps", "type": "u16" },
+        { "name": "protocolFeeBps", "type": "u16" },
+        { "name": "cliffFeeBps", "type": "u16" },
+        { "name": "reductionFactor", "type": "u16" },
+        { "name": "maxFeeSteps", "type": "u16" },
+        { "name": "variableFeeControl", "type": "u32" },
+        { "name": "maxVolatilityAccumulator", "type": "u32" },
+        { "name": "filterPeriod", "type": "u32" },
+        { "name": "decayPeriod", "type": "u32" },
+        { "name": "volatilityReductionFactor", "type": "u16" },
+        { "name": "maxDynamicFeeBps", "type": "u16" },
+        { "name": "partnerFeeBps", "type": "u16" },
+        { "name": "feeSchedulerMode", "type": "u8" },
+        { "name": "bump", "type": "u8" },
+        { "name": "reserved", "type": { "array": ["u8", 16] } }
+      ]
+    }
+  ]
+}
