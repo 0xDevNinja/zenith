@@ -59,6 +59,27 @@ pub struct LiquidityAdded {
     pub pool_liquidity: u128,
 }
 
+/// Emitted on a swap.
+#[event]
+pub struct Swap {
+    /// The pool.
+    pub pool: Pubkey,
+    /// `true` if the trader sold token A for token B (price fell).
+    pub a_to_b: bool,
+    /// Gross input paid by the trader (including fee).
+    pub amount_in: u64,
+    /// Output received by the trader.
+    pub amount_out: u64,
+    /// Total fee taken from the input.
+    pub fee: u64,
+    /// Portion of the fee routed to the protocol.
+    pub protocol_fee: u64,
+    /// Unspent input returned (nonzero only for partial fills).
+    pub amount_remaining: u64,
+    /// Pool sqrt-price after the swap (Q64.64 raw bits).
+    pub sqrt_price: u128,
+}
+
 /// Emitted when liquidity is removed from a position.
 #[event]
 pub struct LiquidityRemoved {
