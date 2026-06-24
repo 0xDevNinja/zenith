@@ -59,6 +59,13 @@ export class Reader {
   }
 
   pubkey(): PublicKey {
+    // Bounds-check against the logical view length. Unlike the DataView
+    // numeric reads (which are bounds-checked), constructing a Uint8Array over
+    // the raw backing buffer would otherwise read adjacent (pooled) memory on a
+    // short account instead of throwing.
+    if (this.offset + 32 > this.view.byteLength) {
+      throw new RangeError(`pubkey read out of bounds at offset ${this.offset}`);
+    }
     const bytes = new Uint8Array(this.view.buffer, this.view.byteOffset + this.offset, 32);
     this.offset += 32;
     return new PublicKey(bytes);

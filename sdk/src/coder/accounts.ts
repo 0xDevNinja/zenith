@@ -12,10 +12,23 @@ export const DISCRIMINATORS = {
 
 const DISCRIMINATOR_LEN = 8;
 
-function checkDiscriminator(name: keyof typeof DISCRIMINATORS, data: Uint8Array): void {
+/// Full on-chain byte length of each account (8-byte discriminator + payload),
+/// mirroring the program's fixed-size layouts. A shorter buffer is rejected up
+/// front so a truncated/wrong account fails loud rather than decoding garbage.
+const ACCOUNT_LEN = {
+  Pool: 440,
+  Position: 233,
+  Config: 196,
+} as const;
+
+/// Reject data that is not a well-formed account of `name`: too short for the
+/// account's fixed layout, or carrying the wrong discriminator.
+function checkAccount(name: keyof typeof DISCRIMINATORS, data: Uint8Array): void {
   const want = DISCRIMINATORS[name];
-  if (data.length < DISCRIMINATOR_LEN) {
-    throw new Error(`${name}: account data too short (${data.length} bytes)`);
+  if (data.length < ACCOUNT_LEN[name]) {
+    throw new Error(
+      `${name}: account data too short (got ${data.length}, want ${ACCOUNT_LEN[name]})`,
+    );
   }
   for (let i = 0; i < DISCRIMINATOR_LEN; i++) {
     if (data[i] !== want[i]) {
@@ -73,7 +86,7 @@ export interface Pool {
 
 /// Decode a `Pool` account from raw bytes (including the 8-byte discriminator).
 export function decodePool(data: Uint8Array): Pool {
-  checkDiscriminator("Pool", data);
+  checkAccount("Pool", data);
   const r = new Reader(data, DISCRIMINATOR_LEN);
   const liquidity = r.u128();
   const sqrtPrice = r.u128();
@@ -158,7 +171,7 @@ export interface Position {
 
 /// Decode a `Position` account from raw bytes (including the discriminator).
 export function decodePosition(data: Uint8Array): Position {
-  checkDiscriminator("Position", data);
+  checkAccount("Position", data);
   const r = new Reader(data, DISCRIMINATOR_LEN);
   const pool = r.pubkey();
   const nftMint = r.pubkey();
@@ -222,7 +235,7 @@ export interface Config {
 
 /// Decode a `Config` account from raw bytes (including the discriminator).
 export function decodeConfig(data: Uint8Array): Config {
-  checkDiscriminator("Config", data);
+  checkAccount("Config", data);
   const r = new Reader(data, DISCRIMINATOR_LEN);
   const admin = r.pubkey();
   const feeAuthority = r.pubkey();
