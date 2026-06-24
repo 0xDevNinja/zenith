@@ -49,10 +49,14 @@ jobs:
       - name: Format check
         run: cargo fmt -p zenith-amm -- --check
 
-      # Host build + unit tests (account model, PDAs). BPF build / on-chain
-      # integration tests require the Solana + Anchor toolchain and land later.
-      # clippy -D warnings is deferred: the Anchor macros emit unavoidable
-      # deprecation / cfg warnings from the program entrypoint expansion.
+      # Host build + unit/prop tests (math, account model, PDAs, swap step).
+      # The on-chain integration test lives in the separate `amm-integration`
+      # crate and is NOT run here: it needs the BPF .so + the heavy
+      # solana-program-test runtime, so it stays local-only
+      # (`cargo build-sbf` then `cargo test -p amm-integration`). Scoping to
+      # `-p zenith-amm` keeps CI from ever compiling those deps. clippy -D
+      # warnings is deferred: the Anchor macros emit unavoidable deprecation /
+      # cfg warnings from the entrypoint.
       - name: Build
         run: cargo build -p zenith-amm
 
