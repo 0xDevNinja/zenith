@@ -1,0 +1,24 @@
+[package]
+name = "amm-integration"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Local-only on-chain integration tests for zenith-amm (solana-program-test)."
+
+# Tests-only crate: kept out of the `-p zenith-amm` CI path so its heavy
+# solana-program-test / validator-runtime deps never compile in CI. Run locally:
+#   cargo build-sbf --manifest-path programs/zenith-amm/Cargo.toml
+#   cargo test -p amm-integration
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+
+[dev-dependencies]
+zenith-amm = { path = "../../programs/zenith-amm" }
+anchor-lang = "0.31.0"
+solana-program-test = "2.3"
+solana-sdk = "2.3"
+spl-token = { version = "7", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "6", features = ["no-entrypoint"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

@@ -4,6 +4,7 @@ members = [
     "programs/zenith-amm",
     "programs/zenith-dlmm",
     "crates/zenith-math",
+    "tests/amm-integration",
 ]
 
 [profile.release]
