@@ -75,15 +75,35 @@ pub fn dynamic_fee_bps(va: u128, variable_fee_control: u32, max_dynamic_fee_bps:
     fee.min(max_dynamic_fee_bps as u128) as u16
 }
 
-/// One-shot dynamic-fee computation for a swap. Decays the stored accumulator,
-/// adds the price move since the anchor, and derives the surcharge. Returns
-/// `(dynamic_fee_bps, new_accumulator, decayed_reference)`. The caller persists
-/// the new accumulator/reference and decides whether to re-anchor the price.
+/// Result of folding a swap into the volatility state. The caller persists all
+/// four onto the pool.
+pub struct DynamicFeeState {
+    /// Surcharge to add to the base fee this swap, bps.
+    pub dynamic_fee_bps: u16,
+    /// Volatility accumulator after the swap (the live value: reference + move).
+    pub volatility_accumulator: u128,
+    /// Decayed carry for the next swap (fixed within a volatility window).
+    pub volatility_reference: u128,
+    /// Price anchor moves are measured from (re-set when a window starts).
+    pub sqrt_price_reference: u128,
+}
+
+/// Fold a swap into the volatility state and derive the dynamic surcharge.
+///
+/// A "volatility window" begins whenever `elapsed >= filter_period`: the anchor
+/// re-sets to the current price and the *reference* becomes the decayed prior
+/// accumulator (scaled by `reduction_factor` between filter and decay windows,
+/// zero past decay). Within a window the reference and anchor are held fixed, so
+/// the accumulator is `reference + price_move_from_anchor` — the drift is
+/// measured once from a stable anchor (no double-counting), capped at `max_va`.
+/// Computed on the pre-swap price, so a swap's own move is surcharged on the
+/// next trade.
 #[allow(clippy::too_many_arguments)]
 pub fn compute_dynamic_fee(
     sqrt_price: u128,
     sqrt_price_reference: u128,
-    accumulator: u128,
+    volatility_accumulator: u128,
+    volatility_reference: u128,
     elapsed: u64,
     filter_period: u32,
     decay_period: u32,
@@ -91,18 +111,34 @@ pub fn compute_dynamic_fee(
     max_va: u32,
     variable_fee_control: u32,
     max_dynamic_fee_bps: u16,
-) -> (u16, u128, u128) {
-    let reference = decayed_volatility_reference(
-        accumulator,
-        elapsed,
-        filter_period,
-        decay_period,
-        reduction_factor_bps,
-    );
-    let move_bps = price_move_bps(sqrt_price_reference, sqrt_price);
+) -> DynamicFeeState {
+    let new_window = elapsed >= filter_period as u64;
+    let (reference, anchor) = if new_window {
+        // Start a new window: anchor at the current price, carry the decayed
+        // prior accumulator. (elapsed >= filter, so this returns the decayed
+        // value, not the unchanged accumulator.)
+        let carry = decayed_volatility_reference(
+            volatility_accumulator,
+            elapsed,
+            filter_period,
+            decay_period,
+            reduction_factor_bps,
+        );
+        (carry, sqrt_price)
+    } else {
+        // Inside the window: reference and anchor stay put.
+        (volatility_reference, sqrt_price_reference)
+    };
+
+    let move_bps = price_move_bps(anchor, sqrt_price);
     let va = accumulate_volatility(reference, move_bps, max_va);
     let fee = dynamic_fee_bps(va, variable_fee_control, max_dynamic_fee_bps);
-    (fee, va, reference)
+    DynamicFeeState {
+        dynamic_fee_bps: fee,
+        volatility_accumulator: va,
+        volatility_reference: reference,
+        sqrt_price_reference: anchor,
+    }
 }
 
 /// Current base swap fee (bps) for a scheduler at `elapsed_slots` since pool
@@ -879,22 +915,55 @@ mod tests {
     }
 
     #[test]
-    fn compute_dynamic_fee_spike_then_calm() {
+    fn compute_dynamic_fee_window_semantics() {
         // params: filter 10, decay 100, reduction 50%, max_va 100k, control 1000, max 500.
-        let p = |sqrt_now, sqrt_ref, acc, elapsed| {
+        let p = |sqrt_now, anchor, acc, vr, elapsed| {
             compute_dynamic_fee(
-                sqrt_now, sqrt_ref, acc, elapsed, 10, 100, 5000, 100_000, 1_000, 500,
+                sqrt_now, anchor, acc, vr, elapsed, 10, 100, 5000, 100_000, 1_000, 500,
             )
         };
-        // Calm: price at anchor, no prior vol -> 0 fee.
-        let (fee, va, _) = p(100 * ONE, 100 * ONE, 0, 5);
-        assert_eq!((fee, va), (0, 0));
-        // Spike: +10% (1000 bps) move within filter window -> va=1000, fee=1.
-        let (fee, va, _) = p(110 * ONE, 100 * ONE, 0, 5);
-        assert_eq!((fee, va), (1, 1000));
-        // Idle past decay -> reference resets, so even a move starts fresh.
-        let (_, _, reference) = p(110 * ONE, 100 * ONE, 50_000, 200);
-        assert_eq!(reference, 0);
+
+        // In-window (elapsed < filter): anchor/reference fixed, va = ref + drift.
+        let s = p(110 * ONE, 100 * ONE, 0, 0, 5);
+        assert_eq!((s.dynamic_fee_bps, s.volatility_accumulator), (1, 1000));
+        assert_eq!(s.sqrt_price_reference, 100 * ONE);
+        assert_eq!(s.volatility_reference, 0);
+
+        // New window (filter <= elapsed < decay): re-anchor, reference = decayed
+        // prior accumulator (2000 * 50% = 1000), drift 0 -> va = reference.
+        let s = p(110 * ONE, 100 * ONE, 2_000, 0, 20);
+        assert_eq!(s.volatility_reference, 1_000);
+        assert_eq!(s.sqrt_price_reference, 110 * ONE);
+        assert_eq!(s.volatility_accumulator, 1_000);
+
+        // Idle past decay: reference resets to 0.
+        let s = p(110 * ONE, 100 * ONE, 50_000, 9_999, 200);
+        assert_eq!(s.volatility_reference, 0);
+        assert_eq!(s.sqrt_price_reference, 110 * ONE);
+    }
+
+    #[test]
+    fn in_window_drift_does_not_double_count() {
+        // Same fixed anchor across rapid in-window swaps: the accumulator tracks
+        // total drift from the anchor once, not the sum of per-swap legs.
+        let f = |sqrt_now| {
+            compute_dynamic_fee(
+                sqrt_now,
+                100 * ONE,
+                0,
+                0,
+                5,
+                10,
+                100,
+                5000,
+                1_000_000,
+                1_000,
+                10_000,
+            )
+            .volatility_accumulator
+        };
+        assert_eq!(f(110 * ONE), 1000); // +10%
+        assert_eq!(f(120 * ONE), 2000); // +20% from anchor (not 1000+2000)
     }
 
     proptest! {

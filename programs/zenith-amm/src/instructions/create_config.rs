@@ -131,8 +131,10 @@ fn validate_dynamic_fee(d: &DynamicFeeParams) -> Result<()> {
         d.max_volatility_accumulator > 0,
         ZenithError::InvalidFeeConfig
     );
+    // 0 < filter < decay: a positive filter window keeps the anchor stable so
+    // volatility is cumulative; filter == 0 would re-anchor every swap.
     require!(
-        d.filter_period < d.decay_period,
+        d.filter_period > 0 && d.filter_period < d.decay_period,
         ZenithError::InvalidFeeConfig
     );
     require!(
