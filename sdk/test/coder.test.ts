@@ -125,6 +125,13 @@ describe("discriminator guard", () => {
     expect(() => decodePool(bytes("f19a6d04"))).toThrow(/too short/);
   });
 
+  it("rejects a valid discriminator with a truncated body (no silent decode)", () => {
+    // Correct Position discriminator, but only a few payload bytes: must fail
+    // loud on the length check, never read adjacent memory for the pubkeys.
+    const head = POSITION_HEX.slice(0, 16 + 8); // discriminator + 4 body bytes
+    expect(() => decodePosition(bytes(head))).toThrow(/too short/);
+  });
+
   it("exposes the three account discriminators", () => {
     expect(DISCRIMINATORS.Pool).toHaveLength(8);
     expect(DISCRIMINATORS.Position).toHaveLength(8);
