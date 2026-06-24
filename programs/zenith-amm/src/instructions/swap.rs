@@ -162,20 +162,32 @@ pub fn swap(
         }
 
         // Route the fee: LP share into the per-liquidity accumulator (in the
-        // input token), protocol share parked on the pool for later claim.
+        // input token); the protocol share is further split into a partner cut
+        // and the remaining protocol fee, each parked on the pool for later
+        // claim. All three partitions sum to exactly the fee.
         let (protocol_share, lp_share) = split_fee(step.fee, ctx.accounts.config.protocol_fee_bps)?;
+        let (partner_share, protocol_remaining) =
+            split_fee(protocol_share, config.partner_fee_bps)?;
         let growth = fee_growth_delta(lp_share, pool.liquidity)?;
         if a_to_b {
             pool.fee_growth_global_a = pool.fee_growth_global_a.wrapping_add(growth);
             pool.protocol_fee_a = pool
                 .protocol_fee_a
-                .checked_add(protocol_share)
+                .checked_add(protocol_remaining)
+                .ok_or(ZenithError::MathOverflow)?;
+            pool.partner_fee_a = pool
+                .partner_fee_a
+                .checked_add(partner_share)
                 .ok_or(ZenithError::MathOverflow)?;
         } else {
             pool.fee_growth_global_b = pool.fee_growth_global_b.wrapping_add(growth);
             pool.protocol_fee_b = pool
                 .protocol_fee_b
-                .checked_add(protocol_share)
+                .checked_add(protocol_remaining)
+                .ok_or(ZenithError::MathOverflow)?;
+            pool.partner_fee_b = pool
+                .partner_fee_b
+                .checked_add(partner_share)
                 .ok_or(ZenithError::MathOverflow)?;
         }
         pool.sqrt_price = step.next_sqrt_price;

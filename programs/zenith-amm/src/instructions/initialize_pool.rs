@@ -226,7 +226,9 @@ pub fn initialize_pool(
         pool.activation_point = Clock::get()?.slot;
         pool.position_count = 1;
         pool.last_volatility_update = Clock::get()?.slot;
-        pool.reserved_u64 = [0u64; 7];
+        pool.partner_fee_a = 0;
+        pool.partner_fee_b = 0;
+        pool.reserved_u64 = [0u64; 5];
         pool.base_fee_bps = config.base_fee_bps;
         pool.status = PoolStatus::Active as u8;
         pool.pool_authority_bump = ctx.bumps.pool_authority;

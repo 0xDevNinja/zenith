@@ -111,8 +111,12 @@ pub struct Pool {
     pub position_count: u64,
     /// Slot of the last volatility-accumulator update.
     pub last_volatility_update: u64,
+    /// Partner fees accrued in token A (carved from the protocol share).
+    pub partner_fee_a: u64,
+    /// Partner fees accrued in token B (carved from the protocol share).
+    pub partner_fee_b: u64,
     /// Reserved 8-byte fields.
-    pub reserved_u64: [u64; 7],
+    pub reserved_u64: [u64; 5],
 
     // --- small ---
     /// Informational snapshot of the config's `base_fee_bps` at creation (the

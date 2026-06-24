@@ -70,6 +70,7 @@ mod tests {
         let c = Config {
             admin: Pubkey::new_unique(),
             fee_authority: Pubkey::new_unique(),
+            partner: Pubkey::new_unique(),
             sqrt_min_price: 1u128 << 32,
             sqrt_max_price: 1u128 << 96,
             fee_period: 0,
@@ -85,9 +86,10 @@ mod tests {
             decay_period: 0,
             volatility_reduction_factor: 0,
             max_dynamic_fee_bps: 0,
+            partner_fee_bps: 0,
             fee_scheduler_mode: 0,
             bump: 251,
-            reserved: [0u8; 28],
+            reserved: [0u8; 16],
         };
         let bytes = c.try_to_vec().unwrap();
         let back = Config::try_from_slice(&bytes).unwrap();

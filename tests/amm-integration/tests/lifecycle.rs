@@ -159,6 +159,9 @@ async fn full_m1_lifecycle() {
                 sqrt_max_price: sqrt_max,
                 base_fee_bps: 30,
                 protocol_fee_bps: 1_000,
+                // No partner.
+                partner: Pubkey::default(),
+                partner_fee_bps: 0,
                 // Constant-mode fee scheduler (flat 0.3%); decay params unused.
                 fee_scheduler_mode: 0,
                 cliff_fee_bps: 0,

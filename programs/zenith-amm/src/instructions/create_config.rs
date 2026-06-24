@@ -77,6 +77,8 @@ pub fn create_config(
     sqrt_max_price: u128,
     base_fee_bps: u16,
     protocol_fee_bps: u16,
+    partner: Pubkey,
+    partner_fee_bps: u16,
     fee_scheduler: FeeSchedulerParams,
     dynamic_fee: DynamicFeeParams,
 ) -> Result<()> {
@@ -88,6 +90,13 @@ pub fn create_config(
     // as the default pubkey to claim them).
     require!(
         fee_authority != Pubkey::default(),
+        ZenithError::InvalidFeeConfig
+    );
+    // Partner cut is a share of the protocol fee. With no partner set the rate
+    // must be zero (else fees would accrue to an unclaimable balance).
+    require!(
+        partner_fee_bps as u128 <= BPS_DENOMINATOR as u128
+            && (partner != Pubkey::default() || partner_fee_bps == 0),
         ZenithError::InvalidFeeConfig
     );
     // base_fee_bps must be strictly below 100%: a swap nets `input * (1 -
@@ -104,6 +113,7 @@ pub fn create_config(
     let config = &mut ctx.accounts.config;
     config.admin = ctx.accounts.admin.key();
     config.fee_authority = fee_authority;
+    config.partner = partner;
     config.sqrt_min_price = sqrt_min_price;
     config.sqrt_max_price = sqrt_max_price;
     config.fee_period = fee_scheduler.fee_period;
@@ -119,9 +129,10 @@ pub fn create_config(
     config.decay_period = dynamic_fee.decay_period;
     config.volatility_reduction_factor = dynamic_fee.volatility_reduction_factor;
     config.max_dynamic_fee_bps = dynamic_fee.max_dynamic_fee_bps;
+    config.partner_fee_bps = partner_fee_bps;
     config.fee_scheduler_mode = fee_scheduler.mode;
     config.bump = ctx.bumps.config;
-    config.reserved = [0u8; 28];
+    config.reserved = [0u8; 16];
 
     Ok(())
 }

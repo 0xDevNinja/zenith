@@ -804,6 +804,27 @@ mod tests {
     }
 
     #[test]
+    fn three_way_fee_split_is_exact() {
+        // fee -> (protocol, lp); protocol -> (partner, protocol_remaining).
+        // lp + protocol_remaining + partner must equal the fee exactly, for any
+        // rates (no leakage, no double-count).
+        for &fee in &[0u64, 1, 7, 1000, u64::MAX / 2] {
+            for &(p_bps, partner_bps) in &[(0u16, 0u16), (1000, 2500), (10000, 10000), (3333, 7777)]
+            {
+                let (protocol, lp) = split_fee(fee, p_bps).unwrap();
+                let (partner, protocol_remaining) = split_fee(protocol, partner_bps).unwrap();
+                assert_eq!(
+                    lp as u128 + protocol_remaining as u128 + partner as u128,
+                    fee as u128,
+                    "fee={fee} p={p_bps} partner={partner_bps}"
+                );
+                // partner is carved only from the protocol share, never the LP's.
+                assert!(partner <= protocol);
+            }
+        }
+    }
+
+    #[test]
     fn fee_split_and_growth() {
         // fee 1000, protocol 25% -> 250 protocol, 750 LP.
         let (protocol, lp) = split_fee(1_000, 2_500).unwrap();

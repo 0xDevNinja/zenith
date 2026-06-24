@@ -81,6 +81,17 @@ pub struct ProtocolFeeClaimed {
     pub amount_b: u64,
 }
 
+/// Emitted when a partner's accrued fees are claimed.
+#[event]
+pub struct PartnerFeeClaimed {
+    /// The pool.
+    pub pool: Pubkey,
+    /// Token A partner fees paid out.
+    pub amount_a: u64,
+    /// Token B partner fees paid out.
+    pub amount_b: u64,
+}
+
 /// Emitted when a position's accrued fees are claimed.
 #[event]
 pub struct FeesClaimed {

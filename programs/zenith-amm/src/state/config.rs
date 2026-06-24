@@ -11,6 +11,9 @@ pub struct Config {
     pub admin: Pubkey,
     /// Authority allowed to claim protocol fees from pools using this config.
     pub fee_authority: Pubkey,
+    /// Partner/integrator that claims a cut of the protocol fee. `default()`
+    /// means no partner (and `partner_fee_bps` must be 0).
+    pub partner: Pubkey,
     /// Default lower bound of the price band (sqrt price, Q64.64 raw bits).
     pub sqrt_min_price: u128,
     /// Default upper bound of the price band (sqrt price, Q64.64 raw bits).
@@ -48,10 +51,12 @@ pub struct Config {
     pub volatility_reduction_factor: u16,
     /// Hard cap on the dynamic surcharge, bps.
     pub max_dynamic_fee_bps: u16,
+    /// Partner's share of the protocol fee, bps (0 if no partner).
+    pub partner_fee_bps: u16,
     /// Fee scheduler mode: 0 = Constant, 1 = Linear, 2 = Exponential.
     pub fee_scheduler_mode: u8,
     /// PDA bump.
     pub bump: u8,
     /// Reserved for forward-compatible fields without a realloc.
-    pub reserved: [u8; 28],
+    pub reserved: [u8; 16],
 }

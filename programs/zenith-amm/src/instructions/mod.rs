@@ -1,5 +1,6 @@
 //! Instruction handlers.
 
+mod claim_partner_fee;
 mod claim_position_fee;
 mod claim_protocol_fee;
 mod close_position;
@@ -9,6 +10,7 @@ mod initialize_pool;
 mod modify_liquidity;
 mod swap;
 
+pub use claim_partner_fee::*;
 pub use claim_position_fee::*;
 pub use claim_protocol_fee::*;
 pub use close_position::*;

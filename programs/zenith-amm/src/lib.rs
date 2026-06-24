@@ -39,6 +39,8 @@ pub mod zenith_amm {
         sqrt_max_price: u128,
         base_fee_bps: u16,
         protocol_fee_bps: u16,
+        partner: Pubkey,
+        partner_fee_bps: u16,
         fee_scheduler_mode: u8,
         cliff_fee_bps: u16,
         reduction_factor: u16,
@@ -59,6 +61,8 @@ pub mod zenith_amm {
             sqrt_max_price,
             base_fee_bps,
             protocol_fee_bps,
+            partner,
+            partner_fee_bps,
             instructions::FeeSchedulerParams {
                 mode: fee_scheduler_mode,
                 cliff_fee_bps,
@@ -146,5 +150,10 @@ pub mod zenith_amm {
     /// Claim the pool's accrued protocol fees (config fee authority only).
     pub fn claim_protocol_fee(ctx: Context<ClaimProtocolFee>) -> Result<()> {
         instructions::claim_protocol_fee(ctx)
+    }
+
+    /// Claim the pool's accrued partner fees (config partner only).
+    pub fn claim_partner_fee(ctx: Context<ClaimPartnerFee>) -> Result<()> {
+        instructions::claim_partner_fee(ctx)
     }
 }
