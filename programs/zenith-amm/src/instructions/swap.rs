@@ -75,6 +75,7 @@ pub fn swap(
     let amount_out;
     let fee;
     let protocol_fee;
+    let partner_fee;
     let amount_remaining;
     let next_sqrt_price;
     let total_fee_bps_out;
@@ -202,7 +203,8 @@ pub fn swap(
         amount_in = step.amount_in;
         amount_out = step.amount_out;
         fee = step.fee;
-        protocol_fee = protocol_share;
+        protocol_fee = protocol_remaining;
+        partner_fee = partner_share;
         amount_remaining = step.amount_remaining;
         next_sqrt_price = step.next_sqrt_price;
         total_fee_bps_out = total_fee_bps;
@@ -261,6 +263,7 @@ pub fn swap(
         amount_out,
         fee,
         protocol_fee,
+        partner_fee,
         amount_remaining,
         sqrt_price: next_sqrt_price,
         total_fee_bps: total_fee_bps_out,
