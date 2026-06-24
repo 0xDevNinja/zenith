@@ -118,8 +118,10 @@ pub struct Swap {
     pub amount_out: u64,
     /// Total fee taken from the input.
     pub fee: u64,
-    /// Portion of the fee routed to the protocol.
+    /// Portion of the fee routed to the protocol (after the partner cut).
     pub protocol_fee: u64,
+    /// Portion of the fee routed to the partner.
+    pub partner_fee: u64,
     /// Unspent input returned (nonzero only for partial fills).
     pub amount_remaining: u64,
     /// Pool sqrt-price after the swap (Q64.64 raw bits).
