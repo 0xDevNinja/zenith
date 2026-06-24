@@ -39,3 +39,41 @@ pub struct PositionCreated {
     /// Account the NFT was minted to (the position owner).
     pub owner: Pubkey,
 }
+
+/// Emitted when liquidity is added to a position.
+#[event]
+pub struct LiquidityAdded {
+    /// The pool.
+    pub pool: Pubkey,
+    /// The position the liquidity was added to.
+    pub position: Pubkey,
+    /// Liquidity `L` added.
+    pub liquidity_delta: u128,
+    /// Token A deposited.
+    pub amount_a: u64,
+    /// Token B deposited.
+    pub amount_b: u64,
+    /// Position's unlocked liquidity after the add.
+    pub position_liquidity: u128,
+    /// Pool's active liquidity after the add.
+    pub pool_liquidity: u128,
+}
+
+/// Emitted when liquidity is removed from a position.
+#[event]
+pub struct LiquidityRemoved {
+    /// The pool.
+    pub pool: Pubkey,
+    /// The position the liquidity was removed from.
+    pub position: Pubkey,
+    /// Liquidity `L` removed.
+    pub liquidity_delta: u128,
+    /// Token A returned.
+    pub amount_a: u64,
+    /// Token B returned.
+    pub amount_b: u64,
+    /// Position's unlocked liquidity after the remove.
+    pub position_liquidity: u128,
+    /// Pool's active liquidity after the remove.
+    pub pool_liquidity: u128,
+}

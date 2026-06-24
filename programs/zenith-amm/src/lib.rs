@@ -67,6 +67,34 @@ pub mod zenith_amm {
         instructions::create_position(ctx)
     }
 
-    // Remaining handlers land in later M1 issues:
-    // add_liquidity, remove_liquidity, swap, claim_position_fee.
+    /// Add liquidity to a position (deposits round up, capped by `*_max`).
+    pub fn add_liquidity(
+        ctx: Context<ModifyLiquidity>,
+        liquidity_delta: u128,
+        token_a_max: u64,
+        token_b_max: u64,
+    ) -> Result<()> {
+        instructions::add_liquidity(ctx, liquidity_delta, token_a_max, token_b_max)
+    }
+
+    /// Remove liquidity from a position (returns round down, floored by `*_min`).
+    pub fn remove_liquidity(
+        ctx: Context<ModifyLiquidity>,
+        liquidity_delta: u128,
+        token_a_min: u64,
+        token_b_min: u64,
+    ) -> Result<()> {
+        instructions::remove_liquidity(ctx, liquidity_delta, token_a_min, token_b_min)
+    }
+
+    /// Remove all unlocked liquidity from a position.
+    pub fn remove_all_liquidity(
+        ctx: Context<ModifyLiquidity>,
+        token_a_min: u64,
+        token_b_min: u64,
+    ) -> Result<()> {
+        instructions::remove_all_liquidity(ctx, token_a_min, token_b_min)
+    }
+
+    // Remaining handlers land in later M1 issues: swap, claim_position_fee.
 }
