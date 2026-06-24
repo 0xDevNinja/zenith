@@ -165,6 +165,13 @@ async fn full_m1_lifecycle() {
                 reduction_factor: 0,
                 fee_period: 0,
                 max_fee_steps: 0,
+                // Dynamic (volatility) fee disabled.
+                variable_fee_control: 0,
+                max_volatility_accumulator: 0,
+                filter_period: 0,
+                decay_period: 0,
+                volatility_reduction_factor: 0,
+                max_dynamic_fee_bps: 0,
             },
         )],
         &payer,

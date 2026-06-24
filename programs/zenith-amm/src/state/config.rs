@@ -33,10 +33,25 @@ pub struct Config {
     pub reduction_factor: u16,
     /// Maximum number of reduction steps; elapsed periods clamp to this.
     pub max_fee_steps: u16,
+    /// --- dynamic (volatility) fee control ---
+    /// Scales the volatility surcharge: `dynamic_fee = va^2 * control / 1e9`.
+    /// Zero disables the dynamic fee.
+    pub variable_fee_control: u32,
+    /// Ceiling on the volatility accumulator (caps the surcharge).
+    pub max_volatility_accumulator: u32,
+    /// Slots within which the volatility anchor price is NOT reset (high-freq
+    /// filter): rapid swaps accumulate against a stable anchor.
+    pub filter_period: u32,
+    /// Slots after which an idle pool's volatility fully resets to zero.
+    pub decay_period: u32,
+    /// Fraction (bps) the accumulator decays to between filter and decay window.
+    pub volatility_reduction_factor: u16,
+    /// Hard cap on the dynamic surcharge, bps.
+    pub max_dynamic_fee_bps: u16,
     /// Fee scheduler mode: 0 = Constant, 1 = Linear, 2 = Exponential.
     pub fee_scheduler_mode: u8,
     /// PDA bump.
     pub bump: u8,
     /// Reserved for forward-compatible fields without a realloc.
-    pub reserved: [u8; 48],
+    pub reserved: [u8; 28],
 }

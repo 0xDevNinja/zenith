@@ -43,6 +43,23 @@ pub struct FeeSchedulerParams {
     pub max_fee_steps: u16,
 }
 
+/// Dynamic (volatility) fee control params. See
+/// [`crate::math::compute_dynamic_fee`]. All-zero disables the dynamic fee.
+pub struct DynamicFeeParams {
+    /// Surcharge scale (`dynamic = va^2 * control / 1e9`). Zero disables it.
+    pub variable_fee_control: u32,
+    /// Accumulator ceiling.
+    pub max_volatility_accumulator: u32,
+    /// High-frequency filter window (slots) before the price anchor resets.
+    pub filter_period: u32,
+    /// Idle window (slots) after which volatility fully resets.
+    pub decay_period: u32,
+    /// Accumulator decay fraction (bps) between filter and decay windows.
+    pub volatility_reduction_factor: u16,
+    /// Hard cap on the dynamic surcharge, bps.
+    pub max_dynamic_fee_bps: u16,
+}
+
 /// Create a config template at `index`.
 ///
 /// `sqrt_min_price` / `sqrt_max_price` are Q64.64 raw bits and must satisfy
@@ -61,6 +78,7 @@ pub fn create_config(
     base_fee_bps: u16,
     protocol_fee_bps: u16,
     fee_scheduler: FeeSchedulerParams,
+    dynamic_fee: DynamicFeeParams,
 ) -> Result<()> {
     require!(
         sqrt_min_price > 0 && sqrt_min_price < sqrt_max_price,
@@ -75,6 +93,7 @@ pub fn create_config(
         ZenithError::InvalidFeeConfig
     );
     validate_fee_scheduler(&fee_scheduler, base_fee_bps)?;
+    validate_dynamic_fee(&dynamic_fee)?;
 
     let config = &mut ctx.accounts.config;
     config.admin = ctx.accounts.admin.key();
@@ -88,10 +107,42 @@ pub fn create_config(
     config.cliff_fee_bps = fee_scheduler.cliff_fee_bps;
     config.reduction_factor = fee_scheduler.reduction_factor;
     config.max_fee_steps = fee_scheduler.max_fee_steps;
+    config.variable_fee_control = dynamic_fee.variable_fee_control;
+    config.max_volatility_accumulator = dynamic_fee.max_volatility_accumulator;
+    config.filter_period = dynamic_fee.filter_period;
+    config.decay_period = dynamic_fee.decay_period;
+    config.volatility_reduction_factor = dynamic_fee.volatility_reduction_factor;
+    config.max_dynamic_fee_bps = dynamic_fee.max_dynamic_fee_bps;
     config.fee_scheduler_mode = fee_scheduler.mode;
     config.bump = ctx.bumps.config;
-    config.reserved = [0u8; 48];
+    config.reserved = [0u8; 28];
 
+    Ok(())
+}
+
+/// Reject nonsensical dynamic-fee params. The all-zero default (disabled) is
+/// always valid; if enabled (`variable_fee_control > 0`) the windows must be
+/// ordered, the reduction a valid fraction, and the cap below 100%.
+fn validate_dynamic_fee(d: &DynamicFeeParams) -> Result<()> {
+    if d.variable_fee_control == 0 {
+        return Ok(());
+    }
+    require!(
+        d.max_volatility_accumulator > 0,
+        ZenithError::InvalidFeeConfig
+    );
+    require!(
+        d.filter_period < d.decay_period,
+        ZenithError::InvalidFeeConfig
+    );
+    require!(
+        d.volatility_reduction_factor <= BPS_DENOMINATOR,
+        ZenithError::InvalidFeeConfig
+    );
+    require!(
+        d.max_dynamic_fee_bps < BPS_DENOMINATOR,
+        ZenithError::InvalidFeeConfig
+    );
     Ok(())
 }
 
