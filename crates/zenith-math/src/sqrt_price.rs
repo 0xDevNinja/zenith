@@ -271,12 +271,22 @@ mod tests {
         // The property compounding relies on: the liquidity sized (Down) from a
         // token budget always re-derives a deposit (Up) that fits the budget —
         // so folding fees into liquidity never needs more tokens than are owed.
-        let (lo, mid, hi) = (one(), Q64x64::from_bits(2 << 64), Q64x64::from_bits(4 << 64));
+        let (lo, mid, hi) = (
+            one(),
+            Q64x64::from_bits(2 << 64),
+            Q64x64::from_bits(4 << 64),
+        );
         for &amt in &[1u128, 7, 1000, 1_000_000, 1_000_000_000_000] {
             let l_a = liquidity_from_amount_a(amt, mid, hi, D).unwrap();
             let l_b = liquidity_from_amount_b(amt, lo, mid, D).unwrap();
-            assert!(delta_a(l_a, mid, hi, U).unwrap() <= amt, "A budget exceeded at {amt}");
-            assert!(delta_b(l_b, lo, mid, U).unwrap() <= amt, "B budget exceeded at {amt}");
+            assert!(
+                delta_a(l_a, mid, hi, U).unwrap() <= amt,
+                "A budget exceeded at {amt}"
+            );
+            assert!(
+                delta_b(l_b, lo, mid, U).unwrap() <= amt,
+                "B budget exceeded at {amt}"
+            );
         }
     }
 
@@ -431,6 +441,31 @@ mod tests {
     }
 
     proptest! {
+        // Budget-fit: sizing liquidity (Down) from a token budget then
+        // re-deriving the deposit (Up) never exceeds the budget. This is the
+        // invariant fee-compounding's `fee_pending -= used` subtraction relies
+        // on. Random amount + random ordered price pair.
+        #[test]
+        fn liquidity_from_amount_never_exceeds_budget(
+            amount in 0u128..u64::MAX as u128,
+            a in 1u128..=u128::MAX,
+            b in 1u128..=u128::MAX,
+        ) {
+            let (sa, sb) = (Q64x64::from_bits(a), Q64x64::from_bits(b));
+            if a != b {
+                if let Some(l) = liquidity_from_amount_a(amount, sa, sb, D) {
+                    if let Some(back) = delta_a(l, sa, sb, U) {
+                        prop_assert!(back <= amount, "A: {back} > {amount}");
+                    }
+                }
+                if let Some(l) = liquidity_from_amount_b(amount, sa, sb, D) {
+                    if let Some(back) = delta_b(l, sa, sb, U) {
+                        prop_assert!(back <= amount, "B: {back} > {amount}");
+                    }
+                }
+            }
+        }
+
         // sqrt is the floor: z^2 <= x < (z+1)^2.
         #[test]
         fn sqrt_is_floor(x in any::<u128>()) {
