@@ -24,3 +24,19 @@ export {
   type ZenithInstructionName,
   type ZenithAccountName,
 } from "./idl.js";
+export {
+  Reader,
+  DISCRIMINATORS,
+  PoolStatus,
+  TokenFlavor,
+  FeeSchedulerMode,
+  decodePool,
+  decodePosition,
+  decodeConfig,
+  type Pool,
+  type Position,
+  type Config,
+  fetchPool,
+  fetchPosition,
+  fetchConfig,
+} from "./coder/index.js";
