@@ -24,4 +24,6 @@ pub enum ZenithError {
     InvalidFeeConfig,
     #[msg("Amount must be greater than zero")]
     ZeroAmount,
+    #[msg("Position still holds liquidity or unclaimed fees")]
+    PositionNotEmpty,
 }

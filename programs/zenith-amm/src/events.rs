@@ -40,6 +40,17 @@ pub struct PositionCreated {
     pub owner: Pubkey,
 }
 
+/// Emitted when a position is closed and its rent reclaimed.
+#[event]
+pub struct PositionClosed {
+    /// The pool the position belonged to.
+    pub pool: Pubkey,
+    /// The closed position PDA.
+    pub position: Pubkey,
+    /// The burned position NFT mint.
+    pub position_nft_mint: Pubkey,
+}
+
 /// Emitted when liquidity is added to a position.
 #[event]
 pub struct LiquidityAdded {
