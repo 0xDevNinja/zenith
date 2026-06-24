@@ -26,3 +26,16 @@ pub struct PoolInitialized {
     /// Token B deposited to seed the position.
     pub amount_b: u64,
 }
+
+/// Emitted when an empty position is opened via `create_position`.
+#[event]
+pub struct PositionCreated {
+    /// The pool the position belongs to.
+    pub pool: Pubkey,
+    /// The new position PDA.
+    pub position: Pubkey,
+    /// The NFT mint that represents ownership of the position.
+    pub position_nft_mint: Pubkey,
+    /// Account the NFT was minted to (the position owner).
+    pub owner: Pubkey,
+}

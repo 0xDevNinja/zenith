@@ -62,6 +62,11 @@ pub mod zenith_amm {
         instructions::initialize_pool(ctx, sqrt_price, liquidity, token_a_max, token_b_max)
     }
 
+    /// Open an empty liquidity position (mints its ownership NFT).
+    pub fn create_position(ctx: Context<CreatePosition>) -> Result<()> {
+        instructions::create_position(ctx)
+    }
+
     // Remaining handlers land in later M1 issues:
-    // create_position, add_liquidity, remove_liquidity, swap, claim_position_fee.
+    // add_liquidity, remove_liquidity, swap, claim_position_fee.
 }
