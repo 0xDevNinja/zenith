@@ -112,16 +112,15 @@ pub fn swap(
             now.saturating_sub(pool.activation_point),
         )?;
 
-        // Dynamic surcharge from the volatility accumulator (decayed by idle
-        // slots, plus the price drift since the anchor). Computed on the
-        // pre-swap price; this swap's own move is captured for the next one.
-        let pre_sqrt_price = pool.sqrt_price;
-        let vol_elapsed = now.saturating_sub(pool.last_volatility_update);
-        let (dynamic_fee_bps, new_va, new_vol_reference) = compute_dynamic_fee(
-            pre_sqrt_price,
+        // Dynamic surcharge from the volatility state (decayed by idle slots,
+        // plus the price drift since the anchor). Computed on the pre-swap
+        // price; this swap's own move is captured for the next one.
+        let vol = compute_dynamic_fee(
+            pool.sqrt_price,
             pool.sqrt_price_reference,
             pool.volatility_accumulator,
-            vol_elapsed,
+            pool.volatility_reference,
+            now.saturating_sub(pool.last_volatility_update),
             config.filter_period,
             config.decay_period,
             config.volatility_reduction_factor,
@@ -131,8 +130,8 @@ pub fn swap(
         );
 
         // Total fee, clamped strictly below 100% (compute_swap_step requires it).
-        let total_fee_bps =
-            (base_fee_bps as u32 + dynamic_fee_bps as u32).min(BPS_DENOMINATOR as u32 - 1) as u16;
+        let total_fee_bps = (base_fee_bps as u32 + vol.dynamic_fee_bps as u32)
+            .min(BPS_DENOMINATOR as u32 - 1) as u16;
 
         let step = compute_swap_step(
             pool.sqrt_price,
@@ -181,14 +180,12 @@ pub fn swap(
         }
         pool.sqrt_price = step.next_sqrt_price;
 
-        // Persist the volatility state for the next swap; re-anchor the price
-        // when the filter window has elapsed (start of a new volatility window).
-        pool.volatility_accumulator = new_va;
-        pool.volatility_reference = new_vol_reference;
+        // Persist the volatility state for the next swap (the anchor re-set on a
+        // new window is decided inside compute_dynamic_fee).
+        pool.volatility_accumulator = vol.volatility_accumulator;
+        pool.volatility_reference = vol.volatility_reference;
+        pool.sqrt_price_reference = vol.sqrt_price_reference;
         pool.last_volatility_update = now;
-        if vol_elapsed >= config.filter_period as u64 {
-            pool.sqrt_price_reference = pre_sqrt_price;
-        }
 
         amount_in = step.amount_in;
         amount_out = step.amount_out;
@@ -197,7 +194,7 @@ pub fn swap(
         amount_remaining = step.amount_remaining;
         next_sqrt_price = step.next_sqrt_price;
         total_fee_bps_out = total_fee_bps;
-        volatility_out = new_va;
+        volatility_out = vol.volatility_accumulator;
     }
 
     // Token in -> vault; vault -> token out (chosen by direction).
