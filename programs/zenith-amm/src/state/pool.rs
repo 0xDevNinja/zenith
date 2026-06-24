@@ -104,7 +104,9 @@ pub struct Pool {
     pub reserved_u64: [u64; 8],
 
     // --- small ---
-    /// Base swap fee in basis points.
+    /// Informational snapshot of the config's `base_fee_bps` at creation (the
+    /// constant fee / decay floor). NOT the live swap fee: `swap` derives the
+    /// current fee from the config's scheduler + `activation_point` each trade.
     pub base_fee_bps: u16,
     /// Lifecycle status (see [`PoolStatus`]).
     pub status: u8,
