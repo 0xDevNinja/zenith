@@ -142,4 +142,9 @@ pub mod zenith_amm {
     pub fn close_position(ctx: Context<ClosePosition>) -> Result<()> {
         instructions::close_position(ctx)
     }
+
+    /// Claim the pool's accrued protocol fees (config fee authority only).
+    pub fn claim_protocol_fee(ctx: Context<ClaimProtocolFee>) -> Result<()> {
+        instructions::claim_protocol_fee(ctx)
+    }
 }

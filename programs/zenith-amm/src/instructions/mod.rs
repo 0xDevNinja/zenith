@@ -1,6 +1,7 @@
 //! Instruction handlers.
 
 mod claim_position_fee;
+mod claim_protocol_fee;
 mod close_position;
 mod create_config;
 mod create_position;
@@ -9,6 +10,7 @@ mod modify_liquidity;
 mod swap;
 
 pub use claim_position_fee::*;
+pub use claim_protocol_fee::*;
 pub use close_position::*;
 pub use create_config::*;
 pub use create_position::*;

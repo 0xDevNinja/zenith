@@ -380,6 +380,64 @@ async fn full_m1_lifecycle() {
         "A split off: {p1_a} vs {p2_a}"
     );
 
+    // 5b) claim protocol fees (fee_authority = payer). Both swaps charged fees
+    // with a 10% protocol share, so both sides accrued something.
+    let protocol_claim = || zenith_amm::accounts::ClaimProtocolFee {
+        fee_authority: payer.pubkey(),
+        config,
+        pool,
+        pool_authority,
+        token_a_vault: vault_a,
+        token_b_vault: vault_b,
+        recipient_token_a: user_a,
+        recipient_token_b: user_b,
+        token_program: spl_token::ID,
+    };
+    let (pa0, pb0) = (
+        token_balance(&mut banks, &user_a).await,
+        token_balance(&mut banks, &user_b).await,
+    );
+    send(
+        &mut banks,
+        &[ix(
+            protocol_claim(),
+            zenith_amm::instruction::ClaimProtocolFee {},
+        )],
+        &payer,
+        &[&payer],
+    )
+    .await;
+    let (pa1, pb1) = (
+        token_balance(&mut banks, &user_a).await,
+        token_balance(&mut banks, &user_b).await,
+    );
+    assert!(
+        pa1 > pa0 && pb1 > pb0,
+        "protocol fees: a={} b={}",
+        pa1 - pa0,
+        pb1 - pb0
+    );
+    // Re-claim yields nothing (balances zeroed).
+    send(
+        &mut banks,
+        &[ix(
+            protocol_claim(),
+            zenith_amm::instruction::ClaimProtocolFee {},
+        )],
+        &payer,
+        &[&payer],
+    )
+    .await;
+    let (pa2, pb2) = (
+        token_balance(&mut banks, &user_a).await,
+        token_balance(&mut banks, &user_b).await,
+    );
+    assert_eq!(
+        (pa2, pb2),
+        (pa1, pb1),
+        "second protocol claim paid out again"
+    );
+
     // 6) remove all liquidity from both positions.
     for (nft_account, position) in [(nft2_account, position2), (nft1_account, position1)] {
         send(
