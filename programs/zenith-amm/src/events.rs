@@ -59,6 +59,19 @@ pub struct LiquidityAdded {
     pub pool_liquidity: u128,
 }
 
+/// Emitted when a position's accrued fees are claimed.
+#[event]
+pub struct FeesClaimed {
+    /// The pool.
+    pub pool: Pubkey,
+    /// The position fees were claimed from.
+    pub position: Pubkey,
+    /// Token A fees paid out.
+    pub amount_a: u64,
+    /// Token B fees paid out.
+    pub amount_b: u64,
+}
+
 /// Emitted on a swap.
 #[event]
 pub struct Swap {

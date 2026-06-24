@@ -107,5 +107,8 @@ pub mod zenith_amm {
         instructions::swap(ctx, direction, mode, amount, other_amount_threshold)
     }
 
-    // Remaining handlers land in later M1 issues: claim_position_fee.
+    /// Settle and pay out a position's accrued LP fees.
+    pub fn claim_position_fee(ctx: Context<ClaimPositionFee>) -> Result<()> {
+        instructions::claim_position_fee(ctx)
+    }
 }
