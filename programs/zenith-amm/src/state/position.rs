@@ -29,8 +29,11 @@ pub struct Position {
     pub fee_pending_b: u64,
     /// PDA bump.
     pub bump: u8,
+    /// Compounding mode: when nonzero, `claim_position_fee` folds owed fees back
+    /// into the position's liquidity instead of paying them out.
+    pub compounding: u8,
     /// Reserved for forward-compatible fields without a realloc.
-    pub reserved: [u8; 64],
+    pub reserved: [u8; 63],
 }
 
 impl Position {

@@ -6,8 +6,9 @@
 
 use anchor_lang::prelude::*;
 use zenith_math::{
-    delta_a, delta_b, mul_div, mul_shr, next_sqrt_price_from_amount_x,
-    next_sqrt_price_from_amount_y, pow, shl_div, Q64x64, Rounding, SCALE_OFFSET,
+    delta_a, delta_b, liquidity_from_amount_a, liquidity_from_amount_b, mul_div, mul_shr,
+    next_sqrt_price_from_amount_x, next_sqrt_price_from_amount_y, pow, shl_div, Q64x64, Rounding,
+    SCALE_OFFSET,
 };
 
 use crate::errors::ZenithError;
@@ -254,6 +255,61 @@ pub fn initial_liquidity_amounts(
     sqrt_max: u128,
 ) -> Result<(u64, u64)> {
     liquidity_amounts(liquidity, sqrt_price, sqrt_min, sqrt_max, Rounding::Up)
+}
+
+/// Result of folding owed fees into liquidity.
+pub struct CompoundResult {
+    /// Liquidity to add to the position and pool.
+    pub liquidity_delta: u128,
+    /// Token A fees consumed (`<= fee_a`); the remainder stays as pending dust.
+    pub used_a: u64,
+    /// Token B fees consumed (`<= fee_b`).
+    pub used_b: u64,
+}
+
+/// Convert owed fees (`fee_a`, `fee_b`) into the largest liquidity the pair can
+/// back at `sqrt_price` within the band, and the token amounts that liquidity
+/// consumes. The binding token is (nearly) fully used; the other's excess stays
+/// as pending dust. Liquidity is sized rounding **down** and the consumed
+/// deposit rounding **up**, so `used_* <= fee_*` always (no value created). The
+/// fee tokens already sit in the vault, so the caller only moves accounting.
+pub fn compound_fee_into_liquidity(
+    fee_a: u64,
+    fee_b: u64,
+    sqrt_price: u128,
+    sqrt_min: u128,
+    sqrt_max: u128,
+) -> Result<CompoundResult> {
+    let price = Q64x64::from_bits(sqrt_price);
+    let lo = Q64x64::from_bits(sqrt_min);
+    let hi = Q64x64::from_bits(sqrt_max);
+
+    // Liquidity each side's fee budget can back (rounded down).
+    let l_a = liquidity_from_amount_a(fee_a as u128, price, hi, Rounding::Down)
+        .ok_or(ZenithError::MathOverflow)?;
+    let l_b = liquidity_from_amount_b(fee_b as u128, lo, price, Rounding::Down)
+        .ok_or(ZenithError::MathOverflow)?;
+    let liquidity_delta = l_a.min(l_b);
+    if liquidity_delta == 0 {
+        return Ok(CompoundResult {
+            liquidity_delta: 0,
+            used_a: 0,
+            used_b: 0,
+        });
+    }
+
+    // Deposit that liquidity requires (rounded up, guaranteed <= the budgets).
+    let used_a = to_token_amount(
+        delta_a(liquidity_delta, price, hi, Rounding::Up).ok_or(ZenithError::MathOverflow)?,
+    )?;
+    let used_b = to_token_amount(
+        delta_b(liquidity_delta, lo, price, Rounding::Up).ok_or(ZenithError::MathOverflow)?,
+    )?;
+    Ok(CompoundResult {
+        liquidity_delta,
+        used_a,
+        used_b,
+    })
 }
 
 /// Settle the fees a position has earned since its last checkpoint into its
@@ -609,7 +665,8 @@ mod tests {
             fee_pending_a: 0,
             fee_pending_b: 0,
             bump: 0,
-            reserved: [0u8; 64],
+            compounding: 0,
+            reserved: [0u8; 63],
         };
         // Global grew by 0.5 (Q64.64) for A, 2.0 for B since the checkpoint.
         let half = ONE / 2;
@@ -645,7 +702,8 @@ mod tests {
             fee_pending_a: 0,
             fee_pending_b: 0,
             bump: 0,
-            reserved: [0u8; 64],
+            compounding: 0,
+            reserved: [0u8; 63],
         };
         settle_position_fees(&mut pos, global_a, global_b).unwrap();
         assert_eq!(pos.fee_pending_a, 0);
@@ -669,7 +727,8 @@ mod tests {
             fee_pending_a: 0,
             fee_pending_b: 0,
             bump: 0,
-            reserved: [0u8; 64],
+            compounding: 0,
+            reserved: [0u8; 63],
         };
         // Global wrapped past u128::MAX to 5: delta = 5 - (MAX-2) = 8 (wrapping).
         settle_position_fees(&mut pos, 5, 0).unwrap();
@@ -801,6 +860,45 @@ mod tests {
             0,
         );
         assert!(res.is_err());
+    }
+
+    #[test]
+    fn compounding_never_uses_more_than_owed() {
+        // Band sqrt [1,4], price 2. For assorted owed-fee pairs, compounding
+        // consumes <= what's owed on each side, and the liquidity it mints
+        // re-derives a deposit within budget.
+        for &(fa, fb) in &[
+            (0u64, 0u64),
+            (1, 1),
+            (250, 1000),
+            (1_000_000, 13),
+            (5, 9_999_999),
+        ] {
+            let r = compound_fee_into_liquidity(fa, fb, MID, LO, HI).unwrap();
+            assert!(
+                r.used_a <= fa && r.used_b <= fb,
+                "used > owed for ({fa},{fb})"
+            );
+            if r.liquidity_delta > 0 {
+                // The binding side is (nearly) exhausted; both deposits fit.
+                let da = delta_a(
+                    r.liquidity_delta,
+                    Q64x64::from_bits(MID),
+                    Q64x64::from_bits(HI),
+                    Rounding::Up,
+                )
+                .unwrap();
+                let db = delta_b(
+                    r.liquidity_delta,
+                    Q64x64::from_bits(LO),
+                    Q64x64::from_bits(MID),
+                    Rounding::Up,
+                )
+                .unwrap();
+                assert_eq!(da as u64, r.used_a);
+                assert_eq!(db as u64, r.used_b);
+            }
+        }
     }
 
     #[test]

@@ -92,6 +92,21 @@ pub struct PartnerFeeClaimed {
     pub amount_b: u64,
 }
 
+/// Emitted when a position's accrued fees are compounded into liquidity.
+#[event]
+pub struct FeesCompounded {
+    /// The pool.
+    pub pool: Pubkey,
+    /// The position.
+    pub position: Pubkey,
+    /// Liquidity added to the position from the compounded fees.
+    pub liquidity_delta: u128,
+    /// Token A fees folded in.
+    pub amount_a: u64,
+    /// Token B fees folded in.
+    pub amount_b: u64,
+}
+
 /// Emitted when a position's accrued fees are claimed.
 #[event]
 pub struct FeesClaimed {
