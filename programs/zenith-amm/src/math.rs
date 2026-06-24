@@ -280,6 +280,16 @@ pub fn compound_fee_into_liquidity(
     sqrt_min: u128,
     sqrt_max: u128,
 ) -> Result<CompoundResult> {
+    // At a band edge one side's range collapses to zero (no two-sided liquidity
+    // to mint); skip compounding this round and leave the fees pending.
+    if sqrt_price <= sqrt_min || sqrt_price >= sqrt_max {
+        return Ok(CompoundResult {
+            liquidity_delta: 0,
+            used_a: 0,
+            used_b: 0,
+        });
+    }
+
     let price = Q64x64::from_bits(sqrt_price);
     let lo = Q64x64::from_bits(sqrt_min);
     let hi = Q64x64::from_bits(sqrt_max);

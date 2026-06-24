@@ -110,8 +110,16 @@ pub fn claim_position_fee(ctx: Context<ClaimPositionFee>) -> Result<()> {
                     .liquidity
                     .checked_add(c.liquidity_delta)
                     .ok_or(ZenithError::MathOverflow)?;
-                position.fee_pending_a -= c.used_a;
-                position.fee_pending_b -= c.used_b;
+                // used_* <= fee_pending_* by the budget-fit guarantee; checked
+                // anyway to fail safe rather than panic if that ever regresses.
+                position.fee_pending_a = position
+                    .fee_pending_a
+                    .checked_sub(c.used_a)
+                    .ok_or(ZenithError::MathOverflow)?;
+                position.fee_pending_b = position
+                    .fee_pending_b
+                    .checked_sub(c.used_b)
+                    .ok_or(ZenithError::MathOverflow)?;
             }
             emit!(FeesCompounded {
                 pool: pool_key,
