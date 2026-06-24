@@ -116,6 +116,50 @@ pub fn delta_b(
     crate::mul_shr(liquidity, diff, SCALE_OFFSET, rounding).ok()
 }
 
+/// Liquidity backed by `amount` of token `x` (base) between two sqrt prices —
+/// the inverse of [`delta_a`].
+///
+/// `L = amount * sp_lo * sp_hi / (2^64 * (sp_hi - sp_lo))`. Round **down** when
+/// the amount is a budget you must not exceed (the backing deposit is then
+/// `<= amount`). Returns `None` on overflow or a degenerate range.
+pub fn liquidity_from_amount_a(
+    amount: u128,
+    sqrt_a: Q64x64,
+    sqrt_b: Q64x64,
+    rounding: Rounding,
+) -> Option<u128> {
+    let (lo, hi) = order(sqrt_a, sqrt_b);
+    if lo == hi {
+        return None;
+    }
+    let diff = hi - lo;
+    // num = amount * sp_lo * sp_hi  (<= 2^384),  den = (sp_hi - sp_lo) << 64
+    let num = U512::from(amount) * U512::from(lo) * U512::from(hi);
+    let den = U512::from(diff) << SCALE_OFFSET;
+    narrow_512(div_round_512(num, den, rounding))
+}
+
+/// Liquidity backed by `amount` of token `y` (quote) between two sqrt prices —
+/// the inverse of [`delta_b`].
+///
+/// `L = amount * 2^64 / (sp_hi - sp_lo)`. Same rounding guidance as
+/// [`liquidity_from_amount_a`]. Returns `None` on overflow or a degenerate range.
+pub fn liquidity_from_amount_b(
+    amount: u128,
+    sqrt_a: Q64x64,
+    sqrt_b: Q64x64,
+    rounding: Rounding,
+) -> Option<u128> {
+    let (lo, hi) = order(sqrt_a, sqrt_b);
+    if lo == hi {
+        return None;
+    }
+    let diff = hi - lo;
+    let num = U512::from(amount) << SCALE_OFFSET;
+    let den = U512::from(diff);
+    narrow_512(div_round_512(num, den, rounding))
+}
+
 /// Next `sqrt_price` after adding (`add = true`) or removing (`add = false`)
 /// `amount` of token `x` (base / amount0). Adding `x` lowers the price.
 ///
@@ -220,6 +264,26 @@ mod tests {
 
     fn one() -> Q64x64 {
         Q64x64::ONE
+    }
+
+    #[test]
+    fn liquidity_from_amount_fits_budget() {
+        // The property compounding relies on: the liquidity sized (Down) from a
+        // token budget always re-derives a deposit (Up) that fits the budget —
+        // so folding fees into liquidity never needs more tokens than are owed.
+        let (lo, mid, hi) = (one(), Q64x64::from_bits(2 << 64), Q64x64::from_bits(4 << 64));
+        for &amt in &[1u128, 7, 1000, 1_000_000, 1_000_000_000_000] {
+            let l_a = liquidity_from_amount_a(amt, mid, hi, D).unwrap();
+            let l_b = liquidity_from_amount_b(amt, lo, mid, D).unwrap();
+            assert!(delta_a(l_a, mid, hi, U).unwrap() <= amt, "A budget exceeded at {amt}");
+            assert!(delta_b(l_b, lo, mid, U).unwrap() <= amt, "B budget exceeded at {amt}");
+        }
+    }
+
+    #[test]
+    fn liquidity_from_amount_degenerate_range() {
+        assert_eq!(liquidity_from_amount_a(100, one(), one(), D), None);
+        assert_eq!(liquidity_from_amount_b(100, one(), one(), D), None);
     }
 
     #[test]

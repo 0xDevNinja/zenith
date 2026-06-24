@@ -112,7 +112,8 @@ mod tests {
             fee_pending_a: 1,
             fee_pending_b: 2,
             bump: 250,
-            reserved: [0u8; 64],
+            compounding: 0,
+            reserved: [0u8; 63],
         };
         let bytes = p.try_to_vec().unwrap();
         let back = Position::try_from_slice(&bytes).unwrap();

@@ -156,4 +156,12 @@ pub mod zenith_amm {
     pub fn claim_partner_fee(ctx: Context<ClaimPartnerFee>) -> Result<()> {
         instructions::claim_partner_fee(ctx)
     }
+
+    /// Toggle fee-compounding mode for a position.
+    pub fn set_position_compounding(
+        ctx: Context<SetPositionCompounding>,
+        enabled: bool,
+    ) -> Result<()> {
+        instructions::set_position_compounding(ctx, enabled)
+    }
 }

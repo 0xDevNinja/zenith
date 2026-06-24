@@ -8,6 +8,7 @@ mod create_config;
 mod create_position;
 mod initialize_pool;
 mod modify_liquidity;
+mod set_position_compounding;
 mod swap;
 
 pub use claim_partner_fee::*;
@@ -18,4 +19,5 @@ pub use create_config::*;
 pub use create_position::*;
 pub use initialize_pool::*;
 pub use modify_liquidity::*;
+pub use set_position_compounding::*;
 pub use swap::*;

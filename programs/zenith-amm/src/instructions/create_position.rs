@@ -139,7 +139,8 @@ pub fn create_position(ctx: Context<CreatePosition>) -> Result<()> {
     position.fee_pending_a = 0;
     position.fee_pending_b = 0;
     position.bump = ctx.bumps.position;
-    position.reserved = [0u8; 64];
+    position.compounding = 0;
+    position.reserved = [0u8; 63];
 
     emit!(PositionCreated {
         pool: pool_key,

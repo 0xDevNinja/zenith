@@ -15,8 +15,8 @@ use anchor_spl::token::{transfer, Token, TokenAccount, Transfer};
 
 use crate::constants::POOL_AUTHORITY_SEED;
 use crate::errors::ZenithError;
-use crate::events::FeesClaimed;
-use crate::math::settle_position_fees;
+use crate::events::{FeesClaimed, FeesCompounded};
+use crate::math::{compound_fee_into_liquidity, settle_position_fees};
 use crate::state::{Pool, Position};
 
 #[derive(Accounts)]
@@ -24,7 +24,9 @@ pub struct ClaimPositionFee<'info> {
     /// Position owner — must hold the position NFT.
     pub owner: Signer<'info>,
 
-    /// The pool (read only — supplies the live fee accumulators).
+    /// The pool. Mutated only in compounding mode (folds fees into liquidity);
+    /// otherwise read for the live fee accumulators.
+    #[account(mut)]
     pub pool: AccountLoader<'info, Pool>,
 
     #[account(
@@ -68,7 +70,7 @@ pub fn claim_position_fee(ctx: Context<ClaimPositionFee>) -> Result<()> {
 
     let (amount_a, amount_b);
     {
-        let pool = ctx.accounts.pool.load()?;
+        let mut pool = ctx.accounts.pool.load_mut()?;
         require_keys_eq!(
             ctx.accounts.token_a_vault.key(),
             pool.token_a_vault,
@@ -80,13 +82,48 @@ pub fn claim_position_fee(ctx: Context<ClaimPositionFee>) -> Result<()> {
             ZenithError::Unauthorized
         );
 
-        // Roll the latest accrual into the pending buckets, then take it all.
+        // Roll the latest accrual into the pending buckets.
         settle_position_fees(
             &mut ctx.accounts.position,
             pool.fee_growth_global_a,
             pool.fee_growth_global_b,
         )?;
 
+        if ctx.accounts.position.compounding != 0 {
+            // Compounding mode: fold owed fees into liquidity instead of paying
+            // out. The fee tokens already sit in the vaults, so this is pure
+            // accounting — no transfer. Leftover dust stays as pending.
+            let c = compound_fee_into_liquidity(
+                ctx.accounts.position.fee_pending_a,
+                ctx.accounts.position.fee_pending_b,
+                pool.sqrt_price,
+                pool.sqrt_min_price,
+                pool.sqrt_max_price,
+            )?;
+            if c.liquidity_delta > 0 {
+                pool.liquidity = pool
+                    .liquidity
+                    .checked_add(c.liquidity_delta)
+                    .ok_or(ZenithError::MathOverflow)?;
+                let position = &mut ctx.accounts.position;
+                position.liquidity = position
+                    .liquidity
+                    .checked_add(c.liquidity_delta)
+                    .ok_or(ZenithError::MathOverflow)?;
+                position.fee_pending_a -= c.used_a;
+                position.fee_pending_b -= c.used_b;
+            }
+            emit!(FeesCompounded {
+                pool: pool_key,
+                position: ctx.accounts.position.key(),
+                liquidity_delta: c.liquidity_delta,
+                amount_a: c.used_a,
+                amount_b: c.used_b,
+            });
+            return Ok(());
+        }
+
+        // Claim mode: take all pending and pay it out.
         amount_a = ctx.accounts.position.fee_pending_a;
         amount_b = ctx.accounts.position.fee_pending_b;
         ctx.accounts.position.fee_pending_a = 0;
