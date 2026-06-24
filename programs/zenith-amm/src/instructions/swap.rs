@@ -14,7 +14,9 @@ use anchor_spl::token::{transfer, Token, TokenAccount, Transfer};
 use crate::constants::{CONFIG_SEED, POOL_AUTHORITY_SEED};
 use crate::errors::ZenithError;
 use crate::events::Swap as SwapEvent;
-use crate::math::{compute_swap_step, fee_growth_delta, split_fee, SwapDirection, SwapMode};
+use crate::math::{
+    compute_swap_step, fee_growth_delta, scheduled_base_fee_bps, split_fee, SwapDirection, SwapMode,
+};
 use crate::state::{Config, Pool};
 
 #[derive(Accounts)]
@@ -93,6 +95,20 @@ pub fn swap(
             ZenithError::Unauthorized
         );
 
+        // Current base fee from the config's scheduler, based on how long the
+        // pool has been live (slots since its activation point).
+        let elapsed = Clock::get()?.slot.saturating_sub(pool.activation_point);
+        let config = &ctx.accounts.config;
+        let base_fee_bps = scheduled_base_fee_bps(
+            config.fee_scheduler_mode,
+            config.base_fee_bps,
+            config.cliff_fee_bps,
+            config.reduction_factor,
+            config.fee_period,
+            config.max_fee_steps,
+            elapsed,
+        )?;
+
         let step = compute_swap_step(
             pool.sqrt_price,
             pool.liquidity,
@@ -101,7 +117,7 @@ pub fn swap(
             direction,
             mode,
             amount,
-            pool.base_fee_bps,
+            base_fee_bps,
         )?;
         require!(step.amount_out > 0, ZenithError::ZeroAmount);
 

@@ -72,11 +72,16 @@ mod tests {
             fee_authority: Pubkey::new_unique(),
             sqrt_min_price: 1u128 << 32,
             sqrt_max_price: 1u128 << 96,
+            fee_period: 0,
             index: 7,
             base_fee_bps: 25,
             protocol_fee_bps: 1000,
+            cliff_fee_bps: 0,
+            reduction_factor: 0,
+            max_fee_steps: 0,
+            fee_scheduler_mode: 0,
             bump: 251,
-            reserved: [0u8; 64],
+            reserved: [0u8; 48],
         };
         let bytes = c.try_to_vec().unwrap();
         let back = Config::try_from_slice(&bytes).unwrap();
