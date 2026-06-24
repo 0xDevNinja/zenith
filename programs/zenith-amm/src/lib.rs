@@ -96,5 +96,16 @@ pub mod zenith_amm {
         instructions::remove_all_liquidity(ctx, token_a_min, token_b_min)
     }
 
-    // Remaining handlers land in later M1 issues: swap, claim_position_fee.
+    /// Execute a swap (ExactIn / ExactOut / PartialFill) with band protection.
+    pub fn swap(
+        ctx: Context<Swap>,
+        direction: crate::math::SwapDirection,
+        mode: crate::math::SwapMode,
+        amount: u64,
+        other_amount_threshold: u64,
+    ) -> Result<()> {
+        instructions::swap(ctx, direction, mode, amount, other_amount_threshold)
+    }
+
+    // Remaining handlers land in later M1 issues: claim_position_fee.
 }
