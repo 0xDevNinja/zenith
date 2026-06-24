@@ -110,10 +110,11 @@ fn validate_fee_scheduler(s: &FeeSchedulerParams, base_fee_bps: u16) -> Result<(
                 s.cliff_fee_bps >= base_fee_bps && s.cliff_fee_bps < BPS_DENOMINATOR,
                 ZenithError::InvalidFeeConfig
             );
-            // Linear reduction must be sane; exponential factor must be < 100%
-            // (else the base of the power is zero or negative).
+            // Reduction must be in (0, 100%): zero would mean a "decaying"
+            // config that never decays (silently stuck at the cliff), and the
+            // exponential base `(1 - factor)` must stay positive.
             require!(
-                s.reduction_factor < BPS_DENOMINATOR,
+                s.reduction_factor > 0 && s.reduction_factor < BPS_DENOMINATOR,
                 ZenithError::InvalidFeeConfig
             );
             Ok(())
