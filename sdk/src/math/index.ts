@@ -20,3 +20,17 @@ export {
   type SwapStep,
   computeSwapStep,
 } from "./swap.js";
+export { pow } from "./pow.js";
+export {
+  BPS_DENOMINATOR,
+  DYNAMIC_FEE_DENOMINATOR,
+  FeeMode,
+  FeeError,
+  scheduledBaseFeeBps,
+  priceMoveBps,
+  decayedVolatilityReference,
+  accumulateVolatility,
+  dynamicFeeBps,
+  computeDynamicFee,
+  type DynamicFeeState,
+} from "./fee.js";
