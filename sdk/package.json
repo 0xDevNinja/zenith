@@ -21,13 +21,15 @@
   "scripts": {
     "build": "tsup",
     "lint": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:localnet": "RUST_LOG=error vitest run -c vitest.localnet.config.ts"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.95.0"
   },
   "devDependencies": {
+    "solana-bankrun": "^0.4.0",
     "tsup": "^8.0.0",
     "typescript": "^5.5.0",
     "vitest": "^2.0.0"
