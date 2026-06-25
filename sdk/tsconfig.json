@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src", "idl", "test"]
+  "include": ["src", "idl", "test", "localnet", "vitest.config.ts", "vitest.localnet.config.ts"]
 }
