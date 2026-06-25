@@ -7,7 +7,9 @@
 //! safe integer range). `null` encodes a None/overflow/revert result. Rounding
 //! is 0 = Down, 1 = Up (matches the TS enum).
 
-use zenith_amm::math::{compute_swap_step, SwapDirection, SwapMode};
+use zenith_amm::math::{
+    compute_dynamic_fee, compute_swap_step, scheduled_base_fee_bps, SwapDirection, SwapMode,
+};
 use zenith_math::{
     delta_a, delta_b, liquidity_from_amount_a, liquidity_from_amount_b, mul_div, mul_shr,
     next_sqrt_price_from_amount_x, next_sqrt_price_from_amount_y, price_from_sqrt_price, shl_div,
@@ -339,7 +341,133 @@ fn emit_vectors() {
             }
         }
     }
-    out.push_str(&format!("\"swap_step\":[{}]", steps.join(",")));
+    out.push_str(&format!("\"swap_step\":[{}],", steps.join(",")));
+
+    // --- scheduled base fee ---
+    // (base/floor, cliff, reduction, period, max_steps)
+    let sched_cfgs = [
+        (30u16, 500u16, 50u16, 100u64, 8u16),
+        (10, 1000, 5000, 100, 10),
+        (30, 500, 200, 100, 50),
+        (5, 800, 1, 1, 10000),
+    ];
+    let elapseds = [0u64, 1, 99, 100, 250, 500, 800, 900, 100_000, 1u64 << 40];
+    let mut sched = Vec::new();
+    for &(base, cliff, red, period, maxs) in &sched_cfgs {
+        for mode in [0u8, 1, 2] {
+            for &el in &elapseds {
+                let res = scheduled_base_fee_bps(mode, base, cliff, red, period, maxs, el);
+                let o = match res {
+                    Ok(v) => v.to_string(),
+                    Err(_) => "null".to_string(),
+                };
+                sched.push(format!(
+                    "{{\"mode\":{mode},\"base\":{base},\"cliff\":{cliff},\"red\":{red},\"period\":\"{period}\",\"maxs\":{maxs},\"el\":\"{el}\",\"out\":{o}}}"
+                ));
+            }
+        }
+    }
+    out.push_str(&format!("\"sched_fee\":[{}],", sched.join(",")));
+
+    // --- dynamic (volatility) fee ---
+    // (sqrt_price, sqrt_ref, acc, vref, elapsed)
+    let dyn_scn = [
+        (110 * ONE, 100 * ONE, 0u128, 0u128, 5u64),
+        (110 * ONE, 100 * ONE, 2_000, 0, 20),
+        (110 * ONE, 100 * ONE, 50_000, 9_999, 200),
+        (120 * ONE, 100 * ONE, 0, 0, 5),
+        (90 * ONE, 100 * ONE, 1_000, 500, 50),
+        (100 * ONE, 0, 0, 0, 5),
+        (130 * ONE, 100 * ONE, 100_000, 0, 0),
+    ];
+    // (filter, decay, vol_red, max_va, control, max_dyn)
+    let dyn_cfgs = [
+        (10u32, 100u32, 5000u16, 100_000u32, 1_000u32, 500u16),
+        (10, 100, 5000, 1_000_000, 1_000, 10_000),
+        (5, 50, 2500, 50_000, 0, 500), // control 0 -> disabled
+    ];
+    let mut dynf = Vec::new();
+    for &(sp, sref, acc, vref, el) in &dyn_scn {
+        for &(filt, dec, vred, maxva, ctrl, maxd) in &dyn_cfgs {
+            let s =
+                compute_dynamic_fee(sp, sref, acc, vref, el, filt, dec, vred, maxva, ctrl, maxd);
+            dynf.push(format!(
+                "{{\"sp\":\"{sp}\",\"sref\":\"{sref}\",\"acc\":\"{acc}\",\"vref\":\"{vref}\",\"el\":\"{el}\",\"filt\":{filt},\"dec\":{dec},\"vred\":{vred},\"maxva\":{maxva},\"ctrl\":{ctrl},\"maxd\":{maxd},\"dyn\":{},\"va\":\"{}\",\"vrefOut\":\"{}\",\"sprefOut\":\"{}\"}}",
+                s.dynamic_fee_bps, s.volatility_accumulator, s.volatility_reference, s.sqrt_price_reference
+            ));
+        }
+    }
+    out.push_str(&format!("\"dyn_fee\":[{}],", dynf.join(",")));
+
+    // --- integrated quote-fee path (mirrors swap.rs fee derivation) ---
+    // pool: (sqrt_min, sqrt_price, sqrt_max), activation, last_vol, vol state
+    let qband = (ONE, 2 * ONE, 4 * ONE);
+    let (qmin, qsp, qmax) = qband;
+    let qliq = 10_000_000u128;
+    // (mode, base, cliff, red, period, maxs)
+    let qsched = [
+        (0u8, 30u16, 500u16, 50u16, 100u64, 8u16),
+        (1, 30, 500, 50, 100, 8),
+        (2, 10, 1000, 5000, 100, 10),
+    ];
+    // (filter, decay, vol_red, max_va, control, max_dyn)
+    let qdyncfg = (10u32, 100u32, 5000u16, 100_000u32, 1_000u32, 500u16);
+    let (qf, qd, qvr, qmaxva, qctrl, qmaxd) = qdyncfg;
+    let qslots = [0u64, 50, 100, 500, 1000];
+    let qamts = [1000u64, 100_000, 1_000_000];
+    let mut quotes = Vec::new();
+    let activation = 0u64;
+    for &(mode_b, base, cliff, red, period, maxs) in &qsched {
+        {
+            // pre-set a volatility window: anchor below current price so there is drift
+            let sref = ONE + ONE / 2; // 1.5, below sp=2.0
+            for &now in &qslots {
+                let base_fee = scheduled_base_fee_bps(
+                    mode_b,
+                    base,
+                    cliff,
+                    red,
+                    period,
+                    maxs,
+                    now - activation,
+                )
+                .unwrap();
+                let vol = compute_dynamic_fee(
+                    qsp, sref, 0, 0, now, // last_vol = 0
+                    qf, qd, qvr, qmaxva, qctrl, qmaxd,
+                );
+                let total = (base_fee as u32 + vol.dynamic_fee_bps as u32).min(9999) as u16;
+                for &amt in &qamts {
+                    for dir in [SwapDirection::AToB, SwapDirection::BToA] {
+                        for mode in [SwapMode::ExactIn, SwapMode::ExactOut] {
+                            let res =
+                                compute_swap_step(qsp, qliq, qmin, qmax, dir, mode, amt, total);
+                            let dir_s = match dir {
+                                SwapDirection::AToB => "AToB",
+                                SwapDirection::BToA => "BToA",
+                            };
+                            let mode_s = match mode {
+                                SwapMode::ExactIn => "ExactIn",
+                                SwapMode::ExactOut => "ExactOut",
+                                SwapMode::PartialFill => "PartialFill",
+                            };
+                            let step = match res {
+                                Ok(s) => format!(
+                                    "{{\"nextSqrtPrice\":\"{}\",\"amountIn\":\"{}\",\"amountOut\":\"{}\",\"fee\":\"{}\",\"amountRemaining\":\"{}\"}}",
+                                    s.next_sqrt_price, s.amount_in, s.amount_out, s.fee, s.amount_remaining
+                                ),
+                                Err(_) => "null".to_string(),
+                            };
+                            quotes.push(format!(
+                                "{{\"schedMode\":{mode_b},\"base\":{base},\"cliff\":{cliff},\"red\":{red},\"period\":\"{period}\",\"maxs\":{maxs},\"sp\":\"{qsp}\",\"sref\":\"{sref}\",\"now\":\"{now}\",\"amt\":\"{amt}\",\"dir\":\"{dir_s}\",\"mode\":\"{mode_s}\",\"feeBps\":{total},\"step\":{step}}}"
+                            ));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out.push_str(&format!("\"effective_quote\":[{}]", quotes.join(",")));
 
     out.push('}');
     println!("VECTORS_JSON={out}");
