@@ -7,6 +7,7 @@ import {
   type SwapDirection,
   SwapMode,
   mulDiv,
+  U64_MAX,
 } from "./math/index.js";
 import { computeDynamicFee, scheduledBaseFeeBps } from "./math/fee.js";
 
@@ -151,7 +152,10 @@ export function quoteSwap(params: {
   const bps = BigInt(slippageBps);
   if (mode === SwapMode.ExactOut) {
     // Tolerate paying up to slippage more input (round up — protective).
-    const maxIn = mulDiv(step.amountIn, BPS + bps, BPS, Rounding.Up) ?? step.amountIn;
+    // Clamp to u64: the threshold is encoded as a u64 instruction arg, and the
+    // real input is already a valid u64, so the ceiling never needs to exceed it.
+    const raw = mulDiv(step.amountIn, BPS + bps, BPS, Rounding.Up) ?? step.amountIn;
+    const maxIn = raw > U64_MAX ? U64_MAX : raw;
     quote.maxAmountIn = maxIn;
     quote.otherAmountThreshold = maxIn;
   } else {

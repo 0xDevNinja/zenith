@@ -3,13 +3,16 @@ import { fileURLToPath } from "node:url";
 import { PublicKey } from "@solana/web3.js";
 import { describe, expect, it } from "vitest";
 import {
+  computeDynamicFee,
   type Config,
   effectiveFeeBps,
   type Pool,
   quoteSwap,
+  scheduledBaseFeeBps,
   SwapDirection,
   SwapError,
   SwapMode,
+  U64_MAX,
 } from "../src/index.js";
 
 const fixturePath = fileURLToPath(new URL("./fixtures/math_vectors.json", import.meta.url));
@@ -167,7 +170,7 @@ describe("quoteSwap derived fields", () => {
     expect(q.priceImpactBps && q.priceImpactBps > 0n).toBe(true);
   });
 
-  it("ExactOut: maxAmountIn >= amountIn and is the threshold", () => {
+  it("ExactOut: maxAmountIn >= amountIn, stays a valid u64, is the threshold", () => {
     const q = quoteSwap({
       pool,
       config,
@@ -180,8 +183,71 @@ describe("quoteSwap derived fields", () => {
     expect(q.amountOut).toBe(1_000n);
     expect(q.maxAmountIn).toBeDefined();
     expect(q.maxAmountIn! >= q.amountIn).toBe(true);
+    expect(q.maxAmountIn! <= U64_MAX).toBe(true);
     expect(q.otherAmountThreshold).toBe(q.maxAmountIn);
     expect(q.minAmountOut).toBeUndefined();
+  });
+
+  it("PartialFill: clamps, returns remainder, min-out threshold", () => {
+    const q = quoteSwap({
+      pool,
+      config,
+      slot: 0n,
+      direction: SwapDirection.BToA,
+      mode: SwapMode.PartialFill,
+      amount: (1n << 64n) - 1n, // u64::MAX — far past the band
+      slippageBps: 50,
+    });
+    expect(q.amountRemaining > 0n).toBe(true);
+    expect(q.amountIn + q.amountRemaining).toBe((1n << 64n) - 1n);
+    expect(q.minAmountOut).toBeDefined();
+    expect(q.minAmountOut!).toBe((q.amountOut * 9950n) / 10_000n);
+    expect(q.otherAmountThreshold).toBe(q.minAmountOut);
+  });
+
+  it("scheduler uses slots-since-activation; dynamic uses slots-since-last-vol", () => {
+    // Distinct, nonzero bases so a swap of the two would change the result.
+    const cfg = makeConfig({ feeSchedulerMode: 1 }); // linear, decays with age
+    const p = makePool({
+      sqrtPrice: 2n * ONE,
+      sqrtPriceReference: ONE + ONE / 2n, // 1.5 anchor -> drift -> dynamic fee
+      activationPoint: 100n,
+      lastVolatilityUpdate: 499n,
+    });
+    const slot = 500n;
+    const f = effectiveFeeBps(cfg, p, slot);
+
+    // Base must read (slot - activationPoint) = 400 slots.
+    const wantBase = scheduledBaseFeeBps({
+      mode: cfg.feeSchedulerMode,
+      baseFeeBps: cfg.baseFeeBps,
+      cliffFeeBps: cfg.cliffFeeBps,
+      reductionFactor: cfg.reductionFactor,
+      feePeriod: cfg.feePeriod,
+      maxFeeSteps: cfg.maxFeeSteps,
+      elapsedSlots: 400n,
+    });
+    // Dynamic must read (slot - lastVolatilityUpdate) = 1 slot (in-window).
+    const wantDyn = computeDynamicFee({
+      sqrtPrice: p.sqrtPrice,
+      sqrtPriceReference: p.sqrtPriceReference,
+      volatilityAccumulator: p.volatilityAccumulator,
+      volatilityReference: p.volatilityReference,
+      elapsed: 1n,
+      filterPeriod: cfg.filterPeriod,
+      decayPeriod: cfg.decayPeriod,
+      reductionFactorBps: cfg.volatilityReductionFactor,
+      maxVa: cfg.maxVolatilityAccumulator,
+      variableFeeControl: cfg.variableFeeControl,
+      maxDynamicFeeBps: cfg.maxDynamicFeeBps,
+    }).dynamicFeeBps;
+
+    expect(f.baseFeeBps).toBe(wantBase);
+    expect(f.dynamicFeeBps).toBe(wantDyn);
+    expect(f.totalFeeBps).toBe(Math.min(wantBase + wantDyn, 9999));
+    // Sanity: the two elapsed bases genuinely produce different sub-fees here,
+    // so a swapped subtraction could not coincidentally pass.
+    expect(wantBase).not.toBe(wantDyn);
   });
 
   it("zero slippage makes the threshold exactly the quoted amount", () => {
