@@ -69,6 +69,29 @@ export {
   type SwapQuote,
 } from "./quote.js";
 export {
+  INSTRUCTION_DISCRIMINATORS,
+  type InstructionName,
+  Writer,
+  ixData,
+} from "./instructions/encode.js";
+export {
+  type Built,
+  type CreateConfigParams,
+  buildCreateConfig,
+  buildInitializePool,
+  buildCreatePosition,
+  buildAddLiquidity,
+  buildRemoveLiquidity,
+  buildRemoveAllLiquidity,
+  buildSwap,
+  buildClaimPositionFee,
+  buildClaimProtocolFee,
+  buildClaimPartnerFee,
+  buildSetPositionCompounding,
+  buildClosePosition,
+} from "./instructions/builders.js";
+export { mergeBuilt, buildTransaction, buildTransactionFrom } from "./tx.js";
+export {
   Reader,
   DISCRIMINATORS,
   PoolStatus,
