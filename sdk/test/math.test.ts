@@ -2,9 +2,11 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  computeDynamicFee,
   computeSwapStep,
   deltaA,
   deltaB,
+  FeeError,
   liquidityFromAmountA,
   liquidityFromAmountB,
   mulDiv,
@@ -14,6 +16,7 @@ import {
   priceFromSqrtPrice,
   Q64,
   Rounding,
+  scheduledBaseFeeBps,
   shlDiv,
   sqrtPriceFromPrice,
   SwapDirection,
@@ -205,6 +208,58 @@ describe("delta / liquidity parity", () => {
       (r) => bitsOf(nextSqrtPriceFromAmountY(Q64.fromBits(b(r.sp)), b(r.l), b(r.amt), r.add)),
       (r) => r.out,
     );
+  });
+});
+
+describe("fee engine parity", () => {
+  it("scheduledBaseFeeBps", () => {
+    const misses: string[] = [];
+    for (const r of V.sched_fee) {
+      let got: number | null;
+      try {
+        got = scheduledBaseFeeBps({
+          mode: r.mode,
+          baseFeeBps: r.base,
+          cliffFeeBps: r.cliff,
+          reductionFactor: r.red,
+          feePeriod: b(r.period),
+          maxFeeSteps: r.maxs,
+          elapsedSlots: b(r.el),
+        });
+      } catch (e) {
+        if (!(e instanceof FeeError)) throw e;
+        got = null;
+      }
+      const want = r.out === null ? null : Number(r.out);
+      if (got !== want && misses.length < 8) misses.push(`in=${JSON.stringify(r)} got=${got} want=${want}`);
+    }
+    expect(misses, misses.join("\n")).toHaveLength(0);
+  });
+
+  it("computeDynamicFee (fee + full state)", () => {
+    const misses: string[] = [];
+    for (const r of V.dyn_fee) {
+      const s = computeDynamicFee({
+        sqrtPrice: b(r.sp),
+        sqrtPriceReference: b(r.sref),
+        volatilityAccumulator: b(r.acc),
+        volatilityReference: b(r.vref),
+        elapsed: b(r.el),
+        filterPeriod: r.filt,
+        decayPeriod: r.dec,
+        reductionFactorBps: r.vred,
+        maxVa: r.maxva,
+        variableFeeControl: r.ctrl,
+        maxDynamicFeeBps: r.maxd,
+      });
+      const ok =
+        s.dynamicFeeBps === Number(r.dyn) &&
+        s.volatilityAccumulator === b(r.va) &&
+        s.volatilityReference === b(r.vrefOut) &&
+        s.sqrtPriceReference === b(r.sprefOut);
+      if (!ok && misses.length < 8) misses.push(`in=${JSON.stringify(r)} got=${JSON.stringify({ d: s.dynamicFeeBps, va: s.volatilityAccumulator.toString() })}`);
+    }
+    expect(misses, misses.join("\n")).toHaveLength(0);
   });
 });
 

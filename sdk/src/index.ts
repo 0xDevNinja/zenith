@@ -49,7 +49,25 @@ export {
   type SwapErrorCode,
   type SwapStep,
   computeSwapStep,
+  pow,
+  BPS_DENOMINATOR,
+  DYNAMIC_FEE_DENOMINATOR,
+  FeeMode,
+  FeeError,
+  scheduledBaseFeeBps,
+  priceMoveBps,
+  decayedVolatilityReference,
+  accumulateVolatility,
+  dynamicFeeBps,
+  computeDynamicFee,
+  type DynamicFeeState,
 } from "./math/index.js";
+export {
+  effectiveFeeBps,
+  quoteSwap,
+  type EffectiveFee,
+  type SwapQuote,
+} from "./quote.js";
 export {
   Reader,
   DISCRIMINATORS,
