@@ -13,10 +13,13 @@ import { MARKET } from "@/lib/market";
 import {
   composition,
   executeAddLiquidity,
+  executeClaimFee,
   executeOpenPosition,
   executeRemoveAll,
   executeRemoveLiquidity,
+  inRange,
   liquidityForTokenA,
+  owedFees,
   slipDown,
   slipUp,
 } from "@/lib/liquidity";
@@ -121,7 +124,28 @@ export function Positions() {
     }
   };
 
+  const onClaim = async (p: OwnedPosition) => {
+    if (!publicKey) return;
+    setTx({ kind: "pending", what: "Claiming fees" });
+    try {
+      const sig = await executeClaimFee(base(), { position: p.address, nftMint: p.nftMint });
+      setTx({ kind: "ok", sig });
+      refreshAll();
+    } catch (e) {
+      setTx({ kind: "err", msg: e instanceof Error ? e.message : "Claim failed" });
+    }
+  };
+
   const totalLiquidity = positions.reduce((s, p) => s + p.position.liquidity, 0n);
+  const totalOwed = pool
+    ? positions.reduce(
+        (acc, p) => {
+          const o = owedFees(pool, p.position);
+          return { a: acc.a + o.a, b: acc.b + o.b };
+        },
+        { a: 0n, b: 0n },
+      )
+    : { a: 0n, b: 0n };
 
   return (
     <div className="mx-auto max-w-5xl px-5 pb-24 pt-10 animate-rise">
@@ -229,9 +253,14 @@ export function Positions() {
 
         {/* Manage */}
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <Stat label="Open positions" value={String(positions.length)} />
-            <Stat label="Total liquidity" value={totalLiquidity > 0n ? formatAmount(totalLiquidity, 0, 0) : "0"} accent />
+            <Stat label="Total liquidity" value={totalLiquidity > 0n ? formatAmount(totalLiquidity, 0, 0) : "0"} />
+            <Stat
+              label="Unclaimed fees"
+              value={`${formatAmount(totalOwed.a, A.decimals, 2)} / ${formatAmount(totalOwed.b, B.decimals, 2)}`}
+              accent
+            />
           </div>
 
           {!connected ? (
@@ -246,7 +275,15 @@ export function Positions() {
             </Card>
           ) : (
             positions.map((p, i) => (
-              <PositionCard key={p.address.toBase58()} index={i + 1} owned={p} pool={pool} pending={tx.kind === "pending"} onRemove={onRemove} />
+              <PositionCard
+                key={p.address.toBase58()}
+                index={i + 1}
+                owned={p}
+                pool={pool}
+                pending={tx.kind === "pending"}
+                onRemove={onRemove}
+                onClaim={onClaim}
+              />
             ))
           )}
         </div>
@@ -261,38 +298,54 @@ function PositionCard({
   pool,
   pending,
   onRemove,
+  onClaim,
 }: {
   index: number;
   owned: OwnedPosition;
   pool: ReturnType<typeof usePoolConfig>["pool"];
   pending: boolean;
   onRemove: (p: OwnedPosition, fraction: number) => void;
+  onClaim: (p: OwnedPosition) => void;
 }) {
   const comp = pool ? composition(pool, owned.position.liquidity) : null;
+  const owed = pool ? owedFees(pool, owned.position) : { a: 0n, b: 0n };
+  const hasFees = owed.a > 0n || owed.b > 0n;
   const empty = owned.position.liquidity === 0n;
+  const ranged = pool ? inRange(pool) : true;
 
   return (
     <Card className="p-5">
       <div className="mb-3 flex items-center justify-between">
-        <span className="font-display text-xl text-starlight">Position {index}</span>
+        <span className="flex items-center gap-2.5">
+          <span className="font-display text-xl text-starlight">Position {index}</span>
+          <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", ranged ? "text-meridian" : "text-dusk")}>
+            <span className={cn("h-1.5 w-1.5 rounded-full", ranged ? "bg-meridian shadow-[0_0_8px] shadow-meridian" : "bg-dusk")} />
+            {ranged ? "In range" : "Out of range"}
+          </span>
+        </span>
         <span className="font-mono text-[11px] text-dusk">L {formatAmount(owned.position.liquidity, 0, 0)}</span>
       </div>
       <div className="grid grid-cols-2 gap-3 border-t border-line/40 pt-3">
         <Holding label={A.symbol} raw={comp?.amountA ?? 0n} decimals={A.decimals} />
         <Holding label={B.symbol} raw={comp?.amountB ?? 0n} decimals={B.decimals} />
-        <Holding label={`Fees ${A.symbol}`} raw={owned.position.feePendingA} decimals={A.decimals} accent />
-        <Holding label={`Fees ${B.symbol}`} raw={owned.position.feePendingB} decimals={B.decimals} accent />
+        <Holding label={`Fees ${A.symbol}`} raw={owed.a} decimals={A.decimals} accent />
+        <Holding label={`Fees ${B.symbol}`} raw={owed.b} decimals={B.decimals} accent />
       </div>
-      {!empty && (
-        <div className="mt-4 flex gap-2">
-          <Button variant="outline" size="sm" className="flex-1" disabled={pending} onClick={() => onRemove(owned, 0.5)}>
-            Remove 50%
-          </Button>
-          <Button variant="outline" size="sm" className="flex-1" disabled={pending} onClick={() => onRemove(owned, 1)}>
-            Remove all
-          </Button>
-        </div>
-      )}
+      <div className="mt-4 flex gap-2">
+        <Button variant="gold" size="sm" className="flex-1" disabled={pending || !hasFees} onClick={() => onClaim(owned)}>
+          Claim fees
+        </Button>
+        {!empty && (
+          <>
+            <Button variant="outline" size="sm" className="flex-1" disabled={pending} onClick={() => onRemove(owned, 0.5)}>
+              Remove 50%
+            </Button>
+            <Button variant="outline" size="sm" className="flex-1" disabled={pending} onClick={() => onRemove(owned, 1)}>
+              Remove all
+            </Button>
+          </>
+        )}
+      </div>
     </Card>
   );
 }
