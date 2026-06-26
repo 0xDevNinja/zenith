@@ -21,7 +21,8 @@ export function useBalance(): number | null {
         const lamports = await connection.getBalance(publicKey);
         if (active) setSol(lamports / LAMPORTS_PER_SOL);
       } catch {
-        if (active) setSol(null);
+        // Transient RPC failure (e.g. a rate-limited poll): keep the last known
+        // balance rather than flickering it away. null means disconnected only.
       }
     };
 

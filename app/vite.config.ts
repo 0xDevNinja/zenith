@@ -2,7 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [react()],
   resolve: {
     alias: { "@": path.resolve(__dirname, "src") },
@@ -11,9 +11,11 @@ export default defineConfig({
     dedupe: ["@solana/web3.js", "react", "react-dom"],
   },
   define: {
-    // Some wallet-adapter deps reference process.env / global.
+    // Some wallet-adapter deps reference process.env / global. Keep NODE_ENV
+    // real (the more specific key wins) so prod branches aren't silently lost.
+    "process.env.NODE_ENV": JSON.stringify(mode === "development" ? "development" : "production"),
     "process.env": {},
     global: "globalThis",
   },
   server: { port: 5173 },
-});
+}));
