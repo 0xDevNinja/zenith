@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => ({
     alias: { "@": path.resolve(__dirname, "src") },
     // A single web3.js instance across the app + linked SDK, so `instanceof
     // PublicKey` holds across the boundary.
-    dedupe: ["@solana/web3.js", "react", "react-dom"],
+    dedupe: ["@solana/web3.js", "@solana/spl-token", "react", "react-dom"],
   },
   define: {
     // Some wallet-adapter deps reference process.env / global. Keep NODE_ENV

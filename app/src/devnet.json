@@ -1,0 +1,19 @@
+{
+  "cluster": "devnet",
+  "programId": "AA8cKcHQj63GEHRaLrrT87W1efRZ44U147JTCXC2Rmkq",
+  "configIndex": 1,
+  "config": "HaCW7wen5x9mz1bmuwZwyBVyjAiMtEmDvcDEbqqTVAdZ",
+  "pool": "AynzvqqaS2RiHs5Do63JsywXveoW8ob6BagLnknVkqCJ",
+  "tokenA": "89VXCdFYWPCBcPusrUxNbCvKL8ZCnBnSEic4AcnCcwty",
+  "tokenB": "FcTprLKx5XpVC2pnk3wzwAds5VCAKezETt2WSeZz9X3E",
+  "mints": {
+    "89VXCdFYWPCBcPusrUxNbCvKL8ZCnBnSEic4AcnCcwty": {
+      "symbol": "tUSDC",
+      "decimals": 6
+    },
+    "FcTprLKx5XpVC2pnk3wzwAds5VCAKezETt2WSeZz9X3E": {
+      "symbol": "tUSDT",
+      "decimals": 6
+    }
+  }
+}
