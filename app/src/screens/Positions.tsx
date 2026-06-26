@@ -23,11 +23,9 @@ import {
   slipDown,
   slipUp,
 } from "@/lib/liquidity";
+import { useToast } from "@/lib/toast";
 import { formatAmount, formatPlain, parseAmount } from "@/lib/tokens";
-import { explorerTx } from "@/lib/config";
 import { cn } from "@/lib/utils";
-
-type Tx = { kind: "idle" } | { kind: "pending"; what: string } | { kind: "ok"; sig: string } | { kind: "err"; msg: string };
 
 const SLIPPAGE_BPS = 50;
 const A = MARKET.tokenA;
@@ -43,6 +41,7 @@ export function Positions() {
   const { connection } = useConnection();
   const { publicKey, connected, sendTransaction } = useWallet();
   const { setVisible } = useWalletModal();
+  const { notifyTx } = useToast();
   const { pool, loading: poolLoading, error } = usePoolConfig();
   const { positions, loading: posLoading, refetch: refetchPositions } = usePositions();
 
@@ -51,7 +50,7 @@ export function Positions() {
 
   const [depositStr, setDepositStr] = useState("");
   const [target, setTarget] = useState<"new" | string>("new");
-  const [tx, setTx] = useState<Tx>({ kind: "idle" });
+  const [busy, setBusy] = useState(false);
 
   const amountA = parseAmount(depositStr, A.decimals);
 
@@ -80,60 +79,52 @@ export function Positions() {
   const onProvide = async () => {
     if (!connected || !publicKey) return setVisible(true);
     if (!preview || insufficient) return;
-    setTx({ kind: "pending", what: target === "new" ? "Opening position" : "Adding liquidity" });
-    try {
-      const args = {
-        liquidityDelta: preview.L,
-        tokenAMax: slipUp(preview.amountA, SLIPPAGE_BPS),
-        tokenBMax: slipUp(preview.amountB, SLIPPAGE_BPS),
-      };
-      let sig: string;
-      if (target === "new") {
-        sig = await executeOpenPosition(base(), args);
-      } else {
+    const args = {
+      liquidityDelta: preview.L,
+      tokenAMax: slipUp(preview.amountA, SLIPPAGE_BPS),
+      tokenBMax: slipUp(preview.amountB, SLIPPAGE_BPS),
+    };
+    setBusy(true);
+    const sig = await notifyTx(
+      () => {
+        if (target === "new") return executeOpenPosition(base(), args);
         const p = positions.find((x) => x.address.toBase58() === target)!;
-        sig = await executeAddLiquidity(base(), { position: p.address, nftMint: p.nftMint }, args);
-      }
-      setTx({ kind: "ok", sig });
+        return executeAddLiquidity(base(), { position: p.address, nftMint: p.nftMint }, args);
+      },
+      { pending: target === "new" ? "Opening position…" : "Adding liquidity…", success: target === "new" ? "Position opened" : "Liquidity added" },
+    );
+    if (sig) {
       setDepositStr("");
       refreshAll();
-    } catch (e) {
-      setTx({ kind: "err", msg: e instanceof Error ? e.message : "Transaction failed" });
     }
+    setBusy(false);
   };
 
   const onRemove = async (p: OwnedPosition, fraction: number) => {
     if (!pool || !publicKey) return;
-    setTx({ kind: "pending", what: "Removing liquidity" });
-    try {
-      const all = fraction >= 1;
-      const delta = all ? p.position.liquidity : (p.position.liquidity * BigInt(Math.round(fraction * 100))) / 100n;
-      const comp = composition(pool, delta, Rounding.Down);
-      const mins = {
-        tokenAMin: slipDown(comp.amountA, SLIPPAGE_BPS),
-        tokenBMin: slipDown(comp.amountB, SLIPPAGE_BPS),
-      };
-      const ref = { position: p.address, nftMint: p.nftMint };
-      const sig = all
-        ? await executeRemoveAll(base(), ref, mins)
-        : await executeRemoveLiquidity(base(), ref, { liquidityDelta: delta, ...mins });
-      setTx({ kind: "ok", sig });
-      refreshAll();
-    } catch (e) {
-      setTx({ kind: "err", msg: e instanceof Error ? e.message : "Transaction failed" });
-    }
+    const all = fraction >= 1;
+    const delta = all ? p.position.liquidity : (p.position.liquidity * BigInt(Math.round(fraction * 100))) / 100n;
+    const comp = composition(pool, delta, Rounding.Down);
+    const mins = { tokenAMin: slipDown(comp.amountA, SLIPPAGE_BPS), tokenBMin: slipDown(comp.amountB, SLIPPAGE_BPS) };
+    const ref = { position: p.address, nftMint: p.nftMint };
+    setBusy(true);
+    const sig = await notifyTx(
+      () => (all ? executeRemoveAll(base(), ref, mins) : executeRemoveLiquidity(base(), ref, { liquidityDelta: delta, ...mins })),
+      { pending: all ? "Removing all liquidity…" : "Removing liquidity…", success: "Liquidity removed" },
+    );
+    if (sig) refreshAll();
+    setBusy(false);
   };
 
   const onClaim = async (p: OwnedPosition) => {
     if (!publicKey) return;
-    setTx({ kind: "pending", what: "Claiming fees" });
-    try {
-      const sig = await executeClaimFee(base(), { position: p.address, nftMint: p.nftMint });
-      setTx({ kind: "ok", sig });
-      refreshAll();
-    } catch (e) {
-      setTx({ kind: "err", msg: e instanceof Error ? e.message : "Claim failed" });
-    }
+    setBusy(true);
+    const sig = await notifyTx(() => executeClaimFee(base(), { position: p.address, nftMint: p.nftMint }), {
+      pending: "Claiming fees…",
+      success: "Fees claimed",
+    });
+    if (sig) refreshAll();
+    setBusy(false);
   };
 
   const totalLiquidity = positions.reduce((s, p) => s + p.position.liquidity, 0n);
@@ -154,7 +145,6 @@ export function Positions() {
         <h1 className="mt-1 font-display text-4xl text-starlight">Positions</h1>
       </div>
 
-      <TxBanner tx={tx} />
 
       <div className="grid gap-4 lg:grid-cols-[1fr_1.1fr]">
         {/* Provide */}
@@ -202,10 +192,7 @@ export function Positions() {
             <div className="flex items-center justify-between gap-3">
               <input
                 value={depositStr}
-                onChange={(e) => {
-                  setDepositStr(e.target.value);
-                  setTx({ kind: "idle" });
-                }}
+                onChange={(e) => setDepositStr(e.target.value)}
                 inputMode="decimal"
                 placeholder="0.0"
                 className="w-full bg-transparent font-mono text-3xl tabular-nums tnum text-starlight outline-none placeholder:text-dusk/50"
@@ -241,7 +228,7 @@ export function Positions() {
             connected={connected}
             poolLoading={poolLoading}
             marketError={!!error}
-            pending={tx.kind === "pending"}
+            pending={busy}
             hasAmount={amountA !== null && amountA > 0n}
             balanceLoading={connected && (balA.raw === null || balB.raw === null)}
             previewOk={!!preview}
@@ -280,7 +267,7 @@ export function Positions() {
                 index={i + 1}
                 owned={p}
                 pool={pool}
-                pending={tx.kind === "pending"}
+                pending={busy}
                 onRemove={onRemove}
                 onClaim={onClaim}
               />
@@ -425,18 +412,4 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
       <div className={cn("mt-1 font-mono text-2xl tnum", accent ? "text-star" : "text-starlight")}>{value}</div>
     </Card>
   );
-}
-
-function TxBanner({ tx }: { tx: Tx }) {
-  if (tx.kind === "ok") {
-    return (
-      <a href={explorerTx(tx.sig)} target="_blank" rel="noreferrer" className="mb-4 block rounded-2xl border border-meridian/40 bg-meridian/10 px-4 py-3 text-center text-sm text-meridian hover:bg-meridian/15">
-        Confirmed — view on explorer ↗
-      </a>
-    );
-  }
-  if (tx.kind === "err") {
-    return <div className="mb-4 rounded-2xl border border-star/40 bg-star/10 px-4 py-3 text-center text-sm text-star">{tx.msg}</div>;
-  }
-  return null;
 }
