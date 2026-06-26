@@ -17,5 +17,17 @@ export default defineConfig(({ mode }) => ({
     "process.env": {},
     global: "globalThis",
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Split the heavy Solana/wallet stack off the app chunk so it caches
+        // separately and the initial app payload is smaller.
+        manualChunks: {
+          solana: ["@solana/web3.js", "@solana/spl-token", "@solana/wallet-adapter-react", "@solana/wallet-adapter-react-ui"],
+          react: ["react", "react-dom"],
+        },
+      },
+    },
+  },
   server: { port: 5173 },
 }));

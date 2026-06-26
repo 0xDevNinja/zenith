@@ -8,17 +8,11 @@ import { Button } from "@/components/ui/button";
 import { DepthChart } from "@/components/DepthChart";
 import { usePoolConfig } from "@/lib/usePoolConfig";
 import { useTokenBalance } from "@/lib/useTokenBalance";
+import { useToast } from "@/lib/toast";
 import { MARKET, type TokenInfo } from "@/lib/market";
 import { directionFor, executeSwap } from "@/lib/swap";
 import { formatAmount, formatPlain, parseAmount } from "@/lib/tokens";
-import { explorerTx } from "@/lib/config";
 import { cn } from "@/lib/utils";
-
-type TxState =
-  | { kind: "idle" }
-  | { kind: "pending" }
-  | { kind: "success"; signature: string }
-  | { kind: "error"; message: string };
 
 // Map the pool's price within [sqrtMin, sqrtMax] to 0..1 for the depth marker.
 function activeAt(pool: Pool | null): number {
@@ -34,6 +28,7 @@ export function Swap() {
   const { connection } = useConnection();
   const { publicKey, connected, sendTransaction } = useWallet();
   const { setVisible } = useWalletModal();
+  const { notifyTx } = useToast();
   const { pool, config, loading, error, refetch } = usePoolConfig();
 
   const [inputToken, setInputToken] = useState<TokenInfo>(MARKET.tokenA);
@@ -41,7 +36,7 @@ export function Swap() {
   const [amountStr, setAmountStr] = useState("");
   const [slippageBps, setSlippageBps] = useState(50);
   const [slot, setSlot] = useState<bigint | null>(null);
-  const [tx, setTx] = useState<TxState>({ kind: "idle" });
+  const [busy, setBusy] = useState(false);
 
   const inBal = useTokenBalance(inputToken.mint);
   const outBal = useTokenBalance(outputToken.mint);
@@ -83,7 +78,6 @@ export function Swap() {
     setInputToken(outputToken);
     setOutputToken(inputToken);
     setAmountStr("");
-    setTx({ kind: "idle" });
   };
 
   const insufficient = rawAmount !== null && inBal.raw !== null && rawAmount > inBal.raw;
@@ -95,25 +89,27 @@ export function Swap() {
       return;
     }
     if (!quote || !pool || insufficient) return;
-    setTx({ kind: "pending" });
-    try {
-      const signature = await executeSwap({
-        connection,
-        sendTransaction,
-        owner: publicKey,
-        direction: directionFor(inputToken.mint, pool),
-        mode: SwapMode.ExactIn,
-        amount: quote.amountIn,
-        otherAmountThreshold: quote.otherAmountThreshold,
-      });
-      setTx({ kind: "success", signature });
+    setBusy(true);
+    const sig = await notifyTx(
+      () =>
+        executeSwap({
+          connection,
+          sendTransaction,
+          owner: publicKey,
+          direction: directionFor(inputToken.mint, pool),
+          mode: SwapMode.ExactIn,
+          amount: quote.amountIn,
+          otherAmountThreshold: quote.otherAmountThreshold,
+        }),
+      { pending: `Swapping ${inputToken.symbol} → ${outputToken.symbol}…`, success: "Swap confirmed" },
+    );
+    if (sig) {
       setAmountStr("");
       refetch();
       inBal.refetch();
       outBal.refetch();
-    } catch (e) {
-      setTx({ kind: "error", message: e instanceof Error ? e.message : "Swap failed" });
     }
+    setBusy(false);
   };
 
   const price = pool ? Number(pool.sqrtPrice) ** 2 / 2 ** 128 : null;
@@ -165,10 +161,7 @@ export function Swap() {
             <Field
               label="You pay"
               amount={amountStr}
-              onAmount={(v) => {
-                setAmountStr(v);
-                setTx({ kind: "idle" });
-              }}
+              onAmount={setAmountStr}
               token={inputToken}
               balanceRaw={inBal.raw}
               editable
@@ -230,7 +223,7 @@ export function Swap() {
             connected={connected}
             loading={loading}
             marketError={!!error}
-            pending={tx.kind === "pending"}
+            pending={busy}
             hasAmount={rawAmount !== null && rawAmount > 0n}
             balanceLoading={connected && inBal.raw === null}
             insufficient={!!insufficient}
@@ -239,7 +232,6 @@ export function Swap() {
             onClick={onSwap}
           />
 
-          <TxBanner tx={tx} />
           {connected && inBal.raw === 0n && (
             <p className="mt-3 text-center text-xs text-dusk">
               No {inputToken.symbol} in this wallet. Test tokens are minted by the devnet seed script.
@@ -291,29 +283,6 @@ function SwapButton({
       {label}
     </Button>
   );
-}
-
-function TxBanner({ tx }: { tx: TxState }) {
-  if (tx.kind === "success") {
-    return (
-      <a
-        href={explorerTx(tx.signature)}
-        target="_blank"
-        rel="noreferrer"
-        className="mt-3 block rounded-2xl border border-meridian/40 bg-meridian/10 px-4 py-3 text-center text-sm text-meridian transition-colors hover:bg-meridian/15"
-      >
-        Swap confirmed — view on explorer ↗
-      </a>
-    );
-  }
-  if (tx.kind === "error") {
-    return (
-      <div className="mt-3 rounded-2xl border border-star/40 bg-star/10 px-4 py-3 text-center text-sm text-star">
-        {tx.message}
-      </div>
-    );
-  }
-  return null;
 }
 
 function SlippageControl({ bps, onChange }: { bps: number; onChange: (v: number) => void }) {
