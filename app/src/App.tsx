@@ -21,7 +21,7 @@ export default function App() {
       <Nav active={screen} onNavigate={setScreen} />
       <main>
         {screen === "swap" && <Swap />}
-        {screen === "pools" && <Pools />}
+        {screen === "pools" && <Pools onNavigate={setScreen} />}
         {screen === "positions" && <Positions />}
       </main>
       <footer className="border-t border-line/40 py-6 text-center text-xs text-dusk">
