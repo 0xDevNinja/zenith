@@ -1,6 +1,7 @@
 import type { Connection, PublicKey, Signer, VersionedTransaction } from "@solana/web3.js";
 import {
   buildAddLiquidity,
+  buildClaimPositionFee,
   buildCreatePosition,
   buildRemoveAllLiquidity,
   buildRemoveLiquidity,
@@ -8,11 +9,35 @@ import {
   deltaA,
   deltaB,
   liquidityFromAmountA,
+  mulShr,
   Q64,
   Rounding,
+  SCALE_OFFSET,
   type Pool,
+  type Position,
 } from "@zenith/sdk";
 import { MARKET } from "./market";
+
+const U128_MASK = (1n << 128n) - 1n;
+
+// Fees a position can claim now: already-settled pending plus what has accrued
+// in the global accumulator since its checkpoint. Mirrors the program's
+// settle_position_fees + accrued_fee exactly.
+export function owedFees(pool: Pool, position: Position): { a: bigint; b: bigint } {
+  const total = position.liquidity + position.vestedLiquidity + position.permanentLockedLiquidity;
+  const accrued = (global: bigint, checkpoint: bigint): bigint => {
+    const delta = (global - checkpoint) & U128_MASK; // u128 wrapping_sub
+    return mulShr(total, delta, SCALE_OFFSET, Rounding.Down) ?? 0n;
+  };
+  return {
+    a: position.feePendingA + accrued(pool.feeGrowthGlobalA, position.feeGrowthCheckpointA),
+    b: position.feePendingB + accrued(pool.feeGrowthGlobalB, position.feeGrowthCheckpointB),
+  };
+}
+
+export function inRange(pool: Pool): boolean {
+  return pool.sqrtPrice >= pool.sqrtMinPrice && pool.sqrtPrice <= pool.sqrtMaxPrice;
+}
 
 // Positions in this AMM are full-band over the pool's configured [min,max]; the
 // composition of a liquidity amount L depends only on where the current price
@@ -145,4 +170,15 @@ export function executeRemoveAll(
     ...args,
   });
   return sendBuilt(base, [rm]);
+}
+
+export function executeClaimFee(base: Base, ref: PositionRef): Promise<string> {
+  const claim = buildClaimPositionFee({
+    owner: base.owner,
+    pool: MARKET.pool,
+    ...ref,
+    mintA: MARKET.tokenA.mint,
+    mintB: MARKET.tokenB.mint,
+  });
+  return sendBuilt(base, [claim]);
 }
