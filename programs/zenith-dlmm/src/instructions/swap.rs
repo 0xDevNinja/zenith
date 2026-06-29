@@ -334,7 +334,11 @@ pub fn swap<'info>(
                 .ok_or(DlmmError::MathOverflow)?;
         }
     }
-    let lp_remainder = lp_share - lp_assigned;
+    // lp_assigned <= lp_share (each share floored, Σ net_in == total_in), but
+    // use checked_sub so a future refactor can't silently wrap.
+    let lp_remainder = lp_share
+        .checked_sub(lp_assigned)
+        .ok_or(DlmmError::MathOverflow)?;
     let protocol_accrued = protocol_share
         .checked_add(lp_remainder)
         .ok_or(DlmmError::MathOverflow)?;
