@@ -13,6 +13,7 @@ pub mod events;
 pub mod instructions;
 pub mod pda;
 pub mod state;
+pub mod strategy;
 
 pub use constants::*;
 pub use errors::DlmmError;
@@ -48,6 +49,32 @@ pub mod zenith_dlmm {
         instructions::initialize_bin_array(ctx, index)
     }
 
-    // TODO(M4): initialize_position, add_liquidity_by_strategy,
-    // remove_liquidity, swap.
+    /// Open an empty position over a bin range (within one bin array).
+    pub fn initialize_position(
+        ctx: Context<InitializePosition>,
+        lower_bin_id: i32,
+        width: u32,
+    ) -> Result<()> {
+        instructions::initialize_position(ctx, lower_bin_id, width)
+    }
+
+    /// Add liquidity to a position, shaped across its bins by `strategy`
+    /// (0 = Spot, 1 = Curve, 2 = BidAsk).
+    pub fn add_liquidity_by_strategy(
+        ctx: Context<AddLiquidity>,
+        amount_x: u64,
+        amount_y: u64,
+        strategy: u8,
+        min_liquidity_shares: u128,
+    ) -> Result<()> {
+        instructions::add_liquidity_by_strategy(
+            ctx,
+            amount_x,
+            amount_y,
+            strategy,
+            min_liquidity_shares,
+        )
+    }
+
+    // TODO(M4): remove_liquidity, swap.
 }

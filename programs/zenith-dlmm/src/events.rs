@@ -19,6 +19,38 @@ pub struct LbPairInitialized {
     pub active_bin_price: u128,
 }
 
+/// Emitted when a position is opened over a bin range.
+#[event]
+pub struct PositionInitialized {
+    /// The pair the position belongs to.
+    pub lb_pair: Pubkey,
+    /// The new position PDA.
+    pub position: Pubkey,
+    /// The owner allowed to modify the position.
+    pub owner: Pubkey,
+    /// Inclusive lower bin id.
+    pub lower_bin_id: i32,
+    /// Inclusive upper bin id.
+    pub upper_bin_id: i32,
+}
+
+/// Emitted when liquidity is added to a position.
+#[event]
+pub struct LiquidityAdded {
+    /// The pair.
+    pub lb_pair: Pubkey,
+    /// The position liquidity was added to.
+    pub position: Pubkey,
+    /// Total token X deposited.
+    pub amount_x: u64,
+    /// Total token Y deposited.
+    pub amount_y: u64,
+    /// Total LP shares minted across the range.
+    pub shares_minted: u128,
+    /// Distribution strategy used (0 Spot, 1 Curve, 2 BidAsk).
+    pub strategy: u8,
+}
+
 /// Emitted when a bin array is allocated for a pair.
 #[event]
 pub struct BinArrayInitialized {

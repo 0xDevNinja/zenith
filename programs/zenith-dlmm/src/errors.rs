@@ -18,8 +18,14 @@ pub enum DlmmError {
     InvalidFeeConfig,
     #[msg("Bin range is wider than a position can hold")]
     BinRangeTooWide,
+    #[msg("Position range must lie within a single bin array")]
+    PositionCrossesBinArray,
     #[msg("Bin array index does not match the requested bin id")]
     BinArrayIndexMismatch,
+    #[msg("Unknown liquidity distribution strategy")]
+    InvalidStrategy,
+    #[msg("Cannot deposit this token for the position's bin range")]
+    DepositTokenMismatch,
     #[msg("Pair is not active")]
     PairNotActive,
     #[msg("Signer is not authorized for this action")]
