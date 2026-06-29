@@ -11,6 +11,7 @@
 use anchor_lang::prelude::*;
 
 use crate::constants::MAX_BINS_PER_POSITION;
+use crate::errors::DlmmError;
 
 /// Per-bin fee accounting for a position. Reserved for M4b (per-bin fee
 /// accrual + claim); all fields are zero in M4.
@@ -79,5 +80,60 @@ impl Position {
     /// `true` if the position holds no shares in any bin.
     pub fn is_empty(&self) -> bool {
         self.liquidity_shares.iter().all(|&s| s == 0)
+    }
+
+    /// `true` if the position has any unclaimed fees pending.
+    pub fn has_pending_fees(&self) -> bool {
+        self.fee_infos
+            .iter()
+            .any(|f| f.fee_x_pending != 0 || f.fee_y_pending != 0)
+    }
+
+    /// Settle bin `slot`'s accrued fees into its pending balance and advance the
+    /// checkpoint to `growth_x` / `growth_y` (the bin's current per-share fee
+    /// growth). Call before changing the bin's share count so a share change
+    /// never rewrites past earnings.
+    pub fn settle_bin(&mut self, slot: usize, growth_x: u128, growth_y: u128) -> Result<()> {
+        let shares = self.liquidity_shares[slot];
+        let owed_x = u64::try_from(crate::fee::owed_fee(
+            shares,
+            growth_x,
+            self.fee_infos[slot].fee_x_checkpoint,
+        ))
+        .map_err(|_| DlmmError::MathOverflow)?;
+        let owed_y = u64::try_from(crate::fee::owed_fee(
+            shares,
+            growth_y,
+            self.fee_infos[slot].fee_y_checkpoint,
+        ))
+        .map_err(|_| DlmmError::MathOverflow)?;
+        let info = &mut self.fee_infos[slot];
+        info.fee_x_pending = info
+            .fee_x_pending
+            .checked_add(owed_x)
+            .ok_or(DlmmError::MathOverflow)?;
+        info.fee_y_pending = info
+            .fee_y_pending
+            .checked_add(owed_y)
+            .ok_or(DlmmError::MathOverflow)?;
+        info.fee_x_checkpoint = growth_x;
+        info.fee_y_checkpoint = growth_y;
+        Ok(())
+    }
+
+    /// Sum all bins' pending fees and zero them, returning `(total_x, total_y)`.
+    pub fn take_pending(&mut self) -> Result<(u64, u64)> {
+        let (mut x, mut y) = (0u64, 0u64);
+        for info in self.fee_infos.iter_mut() {
+            x = x
+                .checked_add(info.fee_x_pending)
+                .ok_or(DlmmError::MathOverflow)?;
+            y = y
+                .checked_add(info.fee_y_pending)
+                .ok_or(DlmmError::MathOverflow)?;
+            info.fee_x_pending = 0;
+            info.fee_y_pending = 0;
+        }
+        Ok((x, y))
     }
 }
