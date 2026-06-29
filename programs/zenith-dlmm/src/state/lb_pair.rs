@@ -17,6 +17,7 @@
 //! bin id via `zenith_math::bin_price`.
 
 use anchor_lang::prelude::*;
+use zenith_math::{bin_price, Q64x64, Rounding};
 
 /// Lifecycle state of a pair, stored as a `u8`.
 #[repr(u8)]
@@ -135,5 +136,79 @@ impl LbPair {
     /// `true` if the pair is open for swaps.
     pub fn is_active(&self) -> bool {
         self.status() == PairStatus::Active
+    }
+
+    /// Price of `bin_id` for this pair: `(1 + bin_step/10000)^bin_id` in
+    /// Q64.64. `None` if `bin_step` is invalid or the id falls outside the
+    /// supported price band (see [`zenith_math::bin_price`]).
+    pub fn bin_price(&self, bin_id: i32, rounding: Rounding) -> Option<Q64x64> {
+        bin_price(self.bin_step, bin_id, rounding)
+    }
+
+    /// Price of the currently active bin.
+    pub fn active_bin_price(&self, rounding: Rounding) -> Option<Q64x64> {
+        self.bin_price(self.active_bin_id, rounding)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn pair_with_step(bin_step: u16, active_bin_id: i32) -> LbPair {
+        let mut pair: LbPair = bytemuck::Zeroable::zeroed();
+        pair.bin_step = bin_step;
+        pair.active_bin_id = active_bin_id;
+        pair
+    }
+
+    /// Q64.64 raw bits -> f64, for comparison against a floating reference.
+    fn to_f64(p: Q64x64) -> f64 {
+        p.to_bits() as f64 / 2f64.powi(64)
+    }
+
+    #[test]
+    fn bin_price_matches_floating_reference_across_ids() {
+        // Independent off-chain reference: price(id) = (1 + step/1e4)^id.
+        for &step in &[1u16, 10, 25, 100, 1_000] {
+            let pair = pair_with_step(step, 0);
+            let base = 1.0 + step as f64 / 10_000.0;
+            for id in -50i32..=50 {
+                let got = to_f64(pair.bin_price(id, Rounding::Down).unwrap());
+                let want = base.powi(id);
+                let rel = (got - want).abs() / want;
+                assert!(
+                    rel < 1e-9,
+                    "step {step} id {id}: got {got} want {want} rel {rel}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn bin_zero_is_one_and_prices_are_monotonic() {
+        let pair = pair_with_step(25, 7);
+        assert_eq!(pair.bin_price(0, Rounding::Down).unwrap(), Q64x64::ONE);
+        // strictly increasing in bin id
+        let mut prev = pair.bin_price(-30, Rounding::Down).unwrap().to_bits();
+        for id in -29i32..=30 {
+            let cur = pair.bin_price(id, Rounding::Down).unwrap().to_bits();
+            assert!(cur > prev, "not increasing at id {id}");
+            prev = cur;
+        }
+        // active_bin_price reflects active_bin_id (7)
+        assert_eq!(
+            pair.active_bin_price(Rounding::Down),
+            pair.bin_price(7, Rounding::Down)
+        );
+    }
+
+    #[test]
+    fn bin_price_none_outside_band() {
+        let pair = pair_with_step(10_000, 0); // base 2 -> band |id| <= 32
+        assert!(pair.bin_price(33, Rounding::Down).is_none());
+        // invalid bin step yields no price
+        let bad = pair_with_step(0, 0);
+        assert!(bad.bin_price(0, Rounding::Down).is_none());
     }
 }
