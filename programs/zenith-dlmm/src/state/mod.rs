@@ -14,15 +14,19 @@ mod tests {
     use crate::constants::{MAX_BINS_PER_ARRAY, MAX_BINS_PER_POSITION};
     use anchor_lang::prelude::*;
 
-    /// Solana caps a single account creation well above what these need; the
-    /// AC only requires the accounts allocate in one `create_account` with no
-    /// realloc, i.e. comfortably under the 10 KB realloc bound.
+    /// `create_account` can allocate up to the 10 MiB account cap in one call,
+    /// far above what these accounts need. This deliberately conservative 10 KB
+    /// budget just asserts the batched accounts stay small enough to create
+    /// (and grow via realloc, were that ever needed) without trouble.
     const SINGLE_ALLOC_BUDGET: usize = 10 * 1024;
 
     #[test]
     fn zero_copy_layouts_are_pod_sound() {
-        // 16-byte alignment (u128) and a size that is a multiple of it => no
-        // compiler-inserted padding, which is what makes the zero_copy cast sound.
+        // The real no-padding guarantee is the `#[derive(Pod)]` emitted by
+        // `zero_copy`: it fails to compile if a struct has any padding byte, so
+        // these structs compiling IS the proof. This test additionally pins the
+        // intended shape — 16-byte alignment (a u128 is present) and a size
+        // that is a multiple of it — to catch an accidental field reorder.
         for (align, size) in [
             (
                 core::mem::align_of::<LbPair>(),
@@ -58,6 +62,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::assertions_on_constants)] // sizes are const by design
     fn accounts_fit_a_single_allocation() {
         // The two batched accounts are the only large ones; both must allocate
         // in one create_account (no realloc) per the issue's size-limit AC.

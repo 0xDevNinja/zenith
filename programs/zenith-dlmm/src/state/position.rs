@@ -63,11 +63,17 @@ impl Position {
 
     /// Local slot in `liquidity_shares` for `bin_id`, or `None` if `bin_id` is
     /// outside the position's range.
+    ///
+    /// The offset is computed in `i64` so it cannot overflow; the range check
+    /// guarantees a non-negative slot, and `debug_assert` guards the
+    /// width-<= [`MAX_BINS_PER_POSITION`] invariant the handlers must enforce.
     pub fn slot_of(&self, bin_id: i32) -> Option<usize> {
         if bin_id < self.lower_bin_id || bin_id > self.upper_bin_id {
             return None;
         }
-        Some((bin_id - self.lower_bin_id) as usize)
+        let slot = (bin_id as i64 - self.lower_bin_id as i64) as usize;
+        debug_assert!(slot < MAX_BINS_PER_POSITION);
+        Some(slot)
     }
 
     /// `true` if the position holds no shares in any bin.

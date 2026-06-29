@@ -17,9 +17,10 @@ pub const POSITION_SEED: &[u8] = b"position";
 
 /// Number of bins packed into a single [`crate::state::BinArray`] account.
 ///
-/// Chosen so the account stays well under Solana's single-allocation limit (a
-/// `BinArray` is ~4.5 KB, far below the 10 KB realloc bound and 10 MB cap), so
-/// arrays are created in one `create_account` with no realloc.
+/// Chosen so the account (~4.5 KB) is created in one `create_account` with no
+/// realloc. `create_account` can allocate up to the 10 MiB account cap in a
+/// single call (it is not subject to the 10 KB *realloc-increase* limit), so
+/// this size has ample headroom.
 pub const MAX_BINS_PER_ARRAY: usize = 70;
 
 /// Maximum number of bins a single [`crate::state::Position`] can span. A
