@@ -108,6 +108,30 @@ pub struct DynamicFeeParams {
     pub max_dynamic_fee_bps: u16,
 }
 
+/// Validate the dynamic-fee parameters. The surcharge cap must be in range, and
+/// when the dynamic fee is enabled (`variable_fee_control != 0`) the windows and
+/// accumulator cap must be sane — otherwise the fee would be silently dead
+/// (e.g. `filter_period == 0` re-anchors every swap so volatility never builds,
+/// or a zero cap clamps the accumulator to nothing). When disabled, the unused
+/// window params may be anything.
+pub fn validate_fee_params(fee: &DynamicFeeParams) -> Result<()> {
+    require!(
+        fee.max_dynamic_fee_bps < MAX_FEE_BPS,
+        DlmmError::InvalidFeeConfig
+    );
+    if fee.variable_fee_control != 0 {
+        require!(
+            fee.filter_period > 0 && fee.filter_period <= fee.decay_period,
+            DlmmError::InvalidFeeConfig
+        );
+        require!(
+            fee.max_volatility_accumulator > 0,
+            DlmmError::InvalidFeeConfig
+        );
+    }
+    Ok(())
+}
+
 /// Create the pair and its reserve vaults.
 pub fn initialize_lb_pair(
     ctx: Context<InitializeLbPair>,
@@ -124,6 +148,7 @@ pub fn initialize_lb_pair(
         DlmmError::IdenticalMints
     );
     validate_init_params(bin_step, active_bin_id, base_fee_bps)?;
+    validate_fee_params(&fee)?;
 
     let active_bin_price = bin_price(bin_step, active_bin_id, Rounding::Down)
         .ok_or(DlmmError::BinIdOutOfRange)?
@@ -182,6 +207,31 @@ pub fn initialize_lb_pair(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn fee(control: u32, max_va: u32, filter: u32, decay: u32, max_dyn: u16) -> DynamicFeeParams {
+        DynamicFeeParams {
+            variable_fee_control: control,
+            max_volatility_accumulator: max_va,
+            filter_period: filter,
+            decay_period: decay,
+            volatility_reduction_factor: 5_000,
+            max_dynamic_fee_bps: max_dyn,
+        }
+    }
+
+    #[test]
+    fn fee_params_validated() {
+        // Healthy dynamic-fee config.
+        assert!(validate_fee_params(&fee(1_000_000, 100_000, 10, 100, 1_000)).is_ok());
+        // Dynamic disabled: window params may be anything.
+        assert!(validate_fee_params(&fee(0, 0, 0, 0, 0)).is_ok());
+        // Enabled but broken windows / cap are rejected.
+        assert!(validate_fee_params(&fee(1_000_000, 100_000, 0, 100, 1_000)).is_err()); // filter 0
+        assert!(validate_fee_params(&fee(1_000_000, 100_000, 200, 100, 1_000)).is_err()); // filter > decay
+        assert!(validate_fee_params(&fee(1_000_000, 0, 10, 100, 1_000)).is_err()); // max_va 0
+                                                                                   // Surcharge cap must be < 100% regardless.
+        assert!(validate_fee_params(&fee(0, 0, 0, 0, MAX_FEE_BPS)).is_err());
+    }
 
     #[test]
     fn rejects_zero_and_oversized_bin_step() {
