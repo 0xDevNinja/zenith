@@ -19,7 +19,7 @@ use zenith_math::{bin_price, mul_div, Rounding};
 use crate::constants::PAIR_AUTHORITY_SEED;
 use crate::errors::DlmmError;
 use crate::events::Swap as SwapEvent;
-use crate::state::{BinArray, LbPair};
+use crate::state::{BinArray, LbPair, Oracle};
 use crate::swap_math::{fill_exact_in, fill_exact_out, Direction, SwapMode};
 
 const BPS_DENOMINATOR: u128 = 10_000;
@@ -48,6 +48,11 @@ pub struct Swap<'info> {
     pub user_token_y: Box<Account<'info, TokenAccount>>,
 
     pub token_program: Program<'info, Token>,
+
+    /// Optional TWAP oracle for this pair. When present, the swap records the
+    /// pre-swap active bin into it. Validated in the handler (PDA + lb_pair).
+    #[account(mut)]
+    pub oracle: Option<AccountLoader<'info, Oracle>>,
     // remaining_accounts: the BinArray accounts the walk crosses (mut).
 }
 
@@ -360,6 +365,15 @@ pub fn swap<'info>(
                     .ok_or(DlmmError::MathOverflow)?
             }
         }
+    }
+
+    // --- record the pre-swap active bin into the oracle, if one is passed ---
+    if let Some(oracle) = &ctx.accounts.oracle {
+        let mut o = oracle.load_mut()?;
+        require_keys_eq!(o.lb_pair, lb_pair_key, DlmmError::Unauthorized);
+        let (expected, _) = crate::pda::oracle_pda(&lb_pair_key);
+        require_keys_eq!(oracle.key(), expected, DlmmError::Unauthorized);
+        o.record(active_bin_id, now);
     }
 
     // --- transfers: pull gross input, pay output (pair authority signs) ---

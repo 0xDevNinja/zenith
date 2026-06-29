@@ -75,6 +75,11 @@ pub mod zenith_dlmm {
         instructions::initialize_bin_array(ctx, index)
     }
 
+    /// Create a pair's TWAP oracle ring buffer with `length` observations.
+    pub fn initialize_oracle(ctx: Context<InitializeOracle>, length: u16) -> Result<()> {
+        instructions::initialize_oracle(ctx, length)
+    }
+
     /// Open an empty position over a bin range (within one bin array).
     pub fn initialize_position(
         ctx: Context<InitializePosition>,

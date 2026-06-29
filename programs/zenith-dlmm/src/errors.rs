@@ -28,6 +28,8 @@ pub enum DlmmError {
     InvalidSwapParams,
     #[msg("Swap crosses too many bins; split the order")]
     SwapTooManyBins,
+    #[msg("Oracle length must be between 1 and the capacity")]
+    InvalidOracleLength,
     #[msg("Cannot deposit this token for the position's bin range")]
     DepositTokenMismatch,
     #[msg("Pair is not active")]
