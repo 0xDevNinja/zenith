@@ -19,6 +19,17 @@ pub struct LbPairInitialized {
     pub active_bin_price: u128,
 }
 
+/// Emitted when the protocol's accrued fees are claimed.
+#[event]
+pub struct ProtocolFeeClaimed {
+    /// The pair.
+    pub lb_pair: Pubkey,
+    /// Token X protocol fees paid out.
+    pub amount_x: u64,
+    /// Token Y protocol fees paid out.
+    pub amount_y: u64,
+}
+
 /// Emitted when a position is opened over a bin range.
 #[event]
 pub struct PositionInitialized {

@@ -6,9 +6,11 @@
 //! rises) — walking across bin-array boundaries until the order is filled. The
 //! bin arrays the walk needs are passed as `remaining_accounts`.
 //!
-//! A base fee is taken from the input (rounded up) and accrued to the pair's
-//! protocol fees. M4b adds the volatility/dynamic fee, per-bin LP fee growth,
-//! and the protocol/partner split. Output rounds down; input rounds up.
+//! The fee is `base + variable` (volatility) on the input. It is split by the
+//! pair's `protocol_fee_rate`: the protocol share accrues to `protocol_fee_x/y`
+//! (claimable by the authority) and the LP share is spread back over the bins
+//! the swap traded through. Per-bin *claimable* fee growth and a partner split
+//! land in later M4b issues. Output rounds down; input rounds up.
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{transfer, Token, TokenAccount, Transfer};
@@ -71,7 +73,7 @@ pub fn swap<'info>(
     // The variable fee is computed on the PRE-swap active bin (this swap pays
     // for volatility built by prior trades; its own bin movement surcharges the
     // next swap), so there is no circular dependency with the swap output.
-    let (active_bin_id, bin_step, total_fee_bps, fee_state) = {
+    let (active_bin_id, bin_step, total_fee_bps, protocol_fee_rate, fee_state) = {
         let pair = ctx.accounts.lb_pair.load()?;
         require!(pair.is_active(), DlmmError::PairNotActive);
         require_keys_eq!(
@@ -100,7 +102,13 @@ pub fn swap<'info>(
             pair.max_dynamic_fee_bps,
         );
         let total = crate::fee::total_fee_bps(pair.base_fee_bps, state.variable_fee_bps);
-        (pair.active_bin_id, pair.bin_step, total as u128, state)
+        (
+            pair.active_bin_id,
+            pair.bin_step,
+            total as u128,
+            pair.protocol_fee_rate,
+            state,
+        )
     };
 
     // Collect and validate the bin arrays passed as remaining accounts.
@@ -141,6 +149,9 @@ pub fn swap<'info>(
     let mut cur = active_bin_id;
     let mut new_active = active_bin_id;
     let mut bins_crossed: usize = 0;
+    // Per-bin net input, used to spread the LP fee share back over the bins the
+    // swap actually traded through.
+    let mut bin_inputs: Vec<(i32, u64)> = Vec::new();
 
     'walk: while budget > 0 {
         let arr_index = BinArray::index_of(cur);
@@ -199,6 +210,9 @@ pub fn swap<'info>(
                 }
             }
 
+            if fill.in_used > 0 {
+                bin_inputs.push((cur, fill.in_used));
+            }
             total_in = total_in
                 .checked_add(fill.in_used)
                 .ok_or(DlmmError::MathOverflow)?;
@@ -271,6 +285,60 @@ pub fn swap<'info>(
         }
     };
 
+    // Split the fee: the protocol takes its rate, the rest is the LP share. The
+    // LP share is spread back over the bins the swap traded through (in
+    // proportion to the input each absorbed) so it compounds into those bins'
+    // reserves and the LPs that hold them. Any rounding remainder accrues to the
+    // protocol, so `protocol_accrued + lp_assigned == fee` exactly. (Per-bin
+    // claimable fee growth — claiming without withdrawing — is #39.)
+    let (protocol_share, lp_share) = crate::fee::split_protocol_fee(fee, protocol_fee_rate);
+    let mut lp_assigned: u64 = 0;
+    if lp_share > 0 {
+        for (bin_id, net_in) in &bin_inputs {
+            let lp_bin = mul_div(
+                lp_share as u128,
+                *net_in as u128,
+                total_in as u128,
+                Rounding::Down,
+            )
+            .map_err(|_| DlmmError::MathOverflow)? as u64;
+            if lp_bin == 0 {
+                continue;
+            }
+            let arr_index = BinArray::index_of(*bin_id);
+            let loader = bin_arrays
+                .iter()
+                .find(|l| l.load().map(|a| a.index == arr_index).unwrap_or(false))
+                .ok_or(DlmmError::BinArrayIndexMismatch)?;
+            let mut arr = loader.load_mut()?;
+            let slot = arr
+                .slot_of(*bin_id)
+                .ok_or(DlmmError::BinArrayIndexMismatch)?;
+            let bin = &mut arr.bins[slot];
+            match dir {
+                Direction::XtoY => {
+                    bin.amount_x = bin
+                        .amount_x
+                        .checked_add(lp_bin)
+                        .ok_or(DlmmError::MathOverflow)?
+                }
+                Direction::YtoX => {
+                    bin.amount_y = bin
+                        .amount_y
+                        .checked_add(lp_bin)
+                        .ok_or(DlmmError::MathOverflow)?
+                }
+            }
+            lp_assigned = lp_assigned
+                .checked_add(lp_bin)
+                .ok_or(DlmmError::MathOverflow)?;
+        }
+    }
+    let lp_remainder = lp_share - lp_assigned;
+    let protocol_accrued = protocol_share
+        .checked_add(lp_remainder)
+        .ok_or(DlmmError::MathOverflow)?;
+
     // --- write pair: active bin, volatility state, accrued protocol fee ---
     {
         let mut pair = ctx.accounts.lb_pair.load_mut()?;
@@ -285,13 +353,13 @@ pub fn swap<'info>(
             Direction::XtoY => {
                 pair.protocol_fee_x = pair
                     .protocol_fee_x
-                    .checked_add(fee)
+                    .checked_add(protocol_accrued)
                     .ok_or(DlmmError::MathOverflow)?
             }
             Direction::YtoX => {
                 pair.protocol_fee_y = pair
                     .protocol_fee_y
-                    .checked_add(fee)
+                    .checked_add(protocol_accrued)
                     .ok_or(DlmmError::MathOverflow)?
             }
         }
