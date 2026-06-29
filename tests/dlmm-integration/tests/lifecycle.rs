@@ -30,6 +30,7 @@ use spl_associated_token_account::{
 const DECIMALS: u8 = 6;
 const BIN_STEP: u16 = 25; // 0.25% per bin
 const BASE_FEE_BPS: u16 = 30; // 0.3%
+const PROTOCOL_RATE: u16 = 2_000; // protocol takes 20% of each fee
 
 // Wire enum values.
 const X_TO_Y: u8 = 0;
@@ -40,6 +41,8 @@ const SPOT: u8 = 0;
 /// Byte offset of `active_bin_id` (i32) in a loaded LbPair account: 8 (disc) +
 /// 96 (u128 x6) + 160 (Pubkey x5) + 72 (u64 x9).
 const ACTIVE_BIN_OFFSET: usize = 8 + 96 + 160 + 72;
+/// Byte offset of `protocol_fee_x` (u64): 8 (disc) + 96 (u128 x6) + 160 (Pubkey x5).
+const PROTOCOL_FEE_X_OFFSET: usize = 8 + 96 + 160;
 
 async fn send(banks: &mut BanksClient, ixs: &[Instruction], payer: &Keypair, signers: &[&Keypair]) {
     let bh = banks.get_latest_blockhash().await.unwrap();
@@ -103,6 +106,22 @@ async fn active_bin(banks: &mut BanksClient, lb_pair: &Pubkey) -> i32 {
             .try_into()
             .unwrap(),
     )
+}
+
+/// (protocol_fee_x, protocol_fee_y) read by byte offset.
+async fn protocol_fees(banks: &mut BanksClient, lb_pair: &Pubkey) -> (u64, u64) {
+    let acc = banks.get_account(*lb_pair).await.unwrap().unwrap();
+    let x = u64::from_le_bytes(
+        acc.data[PROTOCOL_FEE_X_OFFSET..PROTOCOL_FEE_X_OFFSET + 8]
+            .try_into()
+            .unwrap(),
+    );
+    let y = u64::from_le_bytes(
+        acc.data[PROTOCOL_FEE_X_OFFSET + 8..PROTOCOL_FEE_X_OFFSET + 16]
+            .try_into()
+            .unwrap(),
+    );
+    (x, y)
 }
 
 fn ix(accounts: impl ToAccountMetas, data: impl InstructionData) -> Instruction {
@@ -169,6 +188,7 @@ async fn full_m4_lifecycle() {
                 bin_step: BIN_STEP,
                 active_bin_id: 0,
                 base_fee_bps: BASE_FEE_BPS,
+                protocol_fee_rate: PROTOCOL_RATE,
                 // Dynamic (volatility) fee disabled — base fee only, so the
                 // lifecycle's swap amounts/conservation are unchanged.
                 variable_fee_control: 0,
@@ -394,6 +414,72 @@ async fn full_m4_lifecycle() {
     assert_eq!(
         balance(&mut banks, &user_y).await + balance(&mut banks, &reserve_y).await,
         total_y
+    );
+
+    // 5d) protocol fee: the 20%-rate split accrued protocol fees in both tokens
+    //     (we swapped both directions). Only the authority can claim them.
+    let (pf_x, pf_y) = protocol_fees(&mut banks, &lb_pair).await;
+    assert!(pf_x > 0 && pf_y > 0, "protocol fees: x={pf_x} y={pf_y}");
+
+    let mk_claim = |authority: Pubkey| zenith_dlmm::accounts::ClaimProtocolFee {
+        authority,
+        lb_pair,
+        pair_authority,
+        reserve_x,
+        reserve_y,
+        recipient_token_x: user_x,
+        recipient_token_y: user_y,
+        token_program: spl_token::ID,
+    };
+    // A non-authority cannot claim.
+    let stranger = Keypair::new();
+    let bh = banks.get_latest_blockhash().await.unwrap();
+    let bad = Transaction::new_signed_with_payer(
+        &[ix(
+            mk_claim(stranger.pubkey()),
+            zenith_dlmm::instruction::ClaimProtocolFee {},
+        )],
+        Some(&payer.pubkey()),
+        &[&payer, &stranger],
+        bh,
+    );
+    assert!(
+        banks.process_transaction(bad).await.is_err(),
+        "non-authority claim must fail"
+    );
+
+    // The authority claims; the recipient gains exactly the accrued fees.
+    let x_before = balance(&mut banks, &user_x).await;
+    let y_before = balance(&mut banks, &user_y).await;
+    send(
+        &mut banks,
+        &[ix(
+            mk_claim(payer.pubkey()),
+            zenith_dlmm::instruction::ClaimProtocolFee {},
+        )],
+        &payer,
+        &[&payer],
+    )
+    .await;
+    assert_eq!(balance(&mut banks, &user_x).await - x_before, pf_x);
+    assert_eq!(balance(&mut banks, &user_y).await - y_before, pf_y);
+    // Accumulator zeroed; a second claim pays nothing.
+    assert_eq!(protocol_fees(&mut banks, &lb_pair).await, (0, 0));
+    let x_mid = balance(&mut banks, &user_x).await;
+    send(
+        &mut banks,
+        &[ix(
+            mk_claim(payer.pubkey()),
+            zenith_dlmm::instruction::ClaimProtocolFee {},
+        )],
+        &payer,
+        &[&payer],
+    )
+    .await;
+    assert_eq!(
+        balance(&mut banks, &user_x).await,
+        x_mid,
+        "re-claim paid out again"
     );
 
     // 6) randomized swap sequence: assert token conservation and an in-band
