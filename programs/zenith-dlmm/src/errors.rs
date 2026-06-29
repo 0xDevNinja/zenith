@@ -24,6 +24,8 @@ pub enum DlmmError {
     BinArrayIndexMismatch,
     #[msg("Unknown liquidity distribution strategy")]
     InvalidStrategy,
+    #[msg("Unknown swap direction or mode")]
+    InvalidSwapParams,
     #[msg("Cannot deposit this token for the position's bin range")]
     DepositTokenMismatch,
     #[msg("Pair is not active")]

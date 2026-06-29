@@ -79,6 +79,27 @@ pub struct PositionClosed {
     pub owner: Pubkey,
 }
 
+/// Emitted on a swap.
+#[event]
+pub struct Swap {
+    /// The pair.
+    pub lb_pair: Pubkey,
+    /// The trader.
+    pub trader: Pubkey,
+    /// Direction: 0 = X->Y, 1 = Y->X.
+    pub direction: u8,
+    /// Mode: 0 = ExactIn, 1 = ExactOut.
+    pub mode: u8,
+    /// Gross input paid by the trader (including fee).
+    pub amount_in: u64,
+    /// Output received by the trader.
+    pub amount_out: u64,
+    /// Base fee taken from the input (accrued to the pair's protocol fees).
+    pub fee: u64,
+    /// Active bin id after the swap.
+    pub active_bin_id: i32,
+}
+
 /// Emitted when a bin array is allocated for a pair.
 #[event]
 pub struct BinArrayInitialized {
