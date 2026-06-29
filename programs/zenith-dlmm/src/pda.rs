@@ -60,6 +60,11 @@ pub fn position_pda(base: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[POSITION_SEED, base.as_ref()], &crate::ID)
 }
 
+/// Oracle (TWAP ring buffer) PDA for a pair.
+pub fn oracle_pda(lb_pair: &Pubkey) -> (Pubkey, u8) {
+    Pubkey::find_program_address(&[ORACLE_SEED, lb_pair.as_ref()], &crate::ID)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
