@@ -8,9 +8,9 @@
 //!
 //! The fee is `base + variable` (volatility) on the input. It is split by the
 //! pair's `protocol_fee_rate`: the protocol share accrues to `protocol_fee_x/y`
-//! (claimable by the authority) and the LP share is spread back over the bins
-//! the swap traded through. Per-bin *claimable* fee growth and a partner split
-//! land in later M4b issues. Output rounds down; input rounds up.
+//! (authority-claimable) and the LP share accrues as per-share fee growth on the
+//! bins the swap traded through (position-claimable via `claim_fee`, without
+//! withdrawing). A partner split lands later. Output rounds down; input up.
 
 use anchor_lang::prelude::*;
 use anchor_spl::token::{transfer, Token, TokenAccount, Transfer};
@@ -287,10 +287,9 @@ pub fn swap<'info>(
 
     // Split the fee: the protocol takes its rate, the rest is the LP share. The
     // LP share is spread back over the bins the swap traded through (in
-    // proportion to the input each absorbed) so it compounds into those bins'
-    // reserves and the LPs that hold them. Any rounding remainder accrues to the
-    // protocol, so `protocol_accrued + lp_assigned == fee` exactly. (Per-bin
-    // claimable fee growth — claiming without withdrawing — is #39.)
+    // proportion to the input each absorbed) as per-share fee growth, claimable
+    // by those bins' LPs via claim_fee. Any rounding remainder accrues to the
+    // protocol, so `protocol_accrued + lp_assigned == fee` exactly.
     let (protocol_share, lp_share) = crate::fee::split_protocol_fee(fee, protocol_fee_rate);
     let mut lp_assigned: u64 = 0;
     if lp_share > 0 {

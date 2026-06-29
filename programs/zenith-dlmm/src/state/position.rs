@@ -13,8 +13,8 @@ use anchor_lang::prelude::*;
 use crate::constants::MAX_BINS_PER_POSITION;
 use crate::errors::DlmmError;
 
-/// Per-bin fee accounting for a position. Reserved for M4b (per-bin fee
-/// accrual + claim); all fields are zero in M4.
+/// Per-bin fee accounting for a position: the last-seen per-share fee growth
+/// (checkpoint) and the fees accrued since, owed but not yet claimed.
 #[zero_copy]
 #[repr(C)]
 #[derive(Default)]
@@ -95,17 +95,15 @@ impl Position {
     /// never rewrites past earnings.
     pub fn settle_bin(&mut self, slot: usize, growth_x: u128, growth_y: u128) -> Result<()> {
         let shares = self.liquidity_shares[slot];
-        let owed_x = u64::try_from(crate::fee::owed_fee(
-            shares,
-            growth_x,
-            self.fee_infos[slot].fee_x_checkpoint,
-        ))
+        let owed_x = u64::try_from(
+            crate::fee::owed_fee(shares, growth_x, self.fee_infos[slot].fee_x_checkpoint)
+                .map_err(|_| DlmmError::MathOverflow)?,
+        )
         .map_err(|_| DlmmError::MathOverflow)?;
-        let owed_y = u64::try_from(crate::fee::owed_fee(
-            shares,
-            growth_y,
-            self.fee_infos[slot].fee_y_checkpoint,
-        ))
+        let owed_y = u64::try_from(
+            crate::fee::owed_fee(shares, growth_y, self.fee_infos[slot].fee_y_checkpoint)
+                .map_err(|_| DlmmError::MathOverflow)?,
+        )
         .map_err(|_| DlmmError::MathOverflow)?;
         let info = &mut self.fee_infos[slot];
         info.fee_x_pending = info

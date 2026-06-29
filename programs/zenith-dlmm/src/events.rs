@@ -118,8 +118,8 @@ pub struct Swap {
     pub amount_in: u64,
     /// Output received by the trader.
     pub amount_out: u64,
-    /// Total fee (base + variable) taken from the input (accrued to the pair's
-    /// protocol fees).
+    /// Total fee (base + variable) taken from the input. Split between the
+    /// pair's protocol fees and per-bin LP fee growth.
     pub fee: u64,
     /// Active bin id after the swap.
     pub active_bin_id: i32,

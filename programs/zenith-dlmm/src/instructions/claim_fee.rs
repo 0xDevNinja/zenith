@@ -78,6 +78,13 @@ pub fn claim_fee(ctx: Context<ClaimFee>) -> Result<()> {
             arr.index == BinArray::index_of(lower),
             DlmmError::BinArrayIndexMismatch
         );
+        // Pin the array to its canonical PDA (defense-in-depth, mirrors swap).
+        let (expected, _) = crate::pda::bin_array_pda(&lb_pair_key, arr.index);
+        require_keys_eq!(
+            ctx.accounts.bin_array.key(),
+            expected,
+            DlmmError::Unauthorized
+        );
 
         // Settle every bin's accrued fees into the position, then collect them.
         for id in lower..=upper {

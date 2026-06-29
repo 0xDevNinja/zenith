@@ -16,12 +16,10 @@ use crate::constants::MAX_BINS_PER_ARRAY;
 #[repr(C)]
 #[derive(Default)]
 pub struct Bin {
-    /// Per-share fee growth in token X (Q64.64 raw bits), reserved for M4b
-    /// per-bin fee accrual. Compared against a position's checkpoint at the
-    /// same scale.
+    /// Cumulative per-share fee growth in token X (Q64.64 raw bits); a swap's
+    /// LP fee share is added here, and positions claim against their checkpoint.
     pub fee_growth_x: u128,
-    /// Per-share fee growth in token Y (Q64.64 raw bits), reserved for M4b
-    /// per-bin fee accrual.
+    /// Cumulative per-share fee growth in token Y (Q64.64 raw bits).
     pub fee_growth_y: u128,
     /// Total LP shares minted against this bin's reserves.
     pub liquidity_supply: u128,
