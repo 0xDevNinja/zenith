@@ -50,7 +50,9 @@ pub fn initialize_position(
         width >= 1 && width as usize <= MAX_BINS_PER_POSITION,
         DlmmError::BinRangeTooWide
     );
-    let upper_bin_id = (lower_bin_id as i64 + width as i64 - 1) as i32;
+    let upper_bin_id = lower_bin_id
+        .checked_add(width as i32 - 1)
+        .ok_or(DlmmError::BinIdOutOfRange)?;
 
     // The whole range must sit inside one bin array (M4 single-array model).
     require!(

@@ -51,14 +51,22 @@ pub struct AddLiquidity<'info> {
 }
 
 /// Add liquidity to `position`, distributing `amount_x` / `amount_y` across its
-/// bins by `strategy`. Reverts if the total shares minted is below
-/// `min_liquidity_shares` (slippage guard).
+/// bins by `strategy`.
+///
+/// The active bin decides how the two tokens split across the range, so a
+/// caller passes the active bin they expect plus a tolerance; if a swap has
+/// moved the active bin outside `[expected - slippage, expected + slippage]`
+/// the deposit reverts (sandwich protection that `min_liquidity_shares` — a
+/// floor on share *count* — cannot provide). Reverts if the total shares
+/// minted is below `min_liquidity_shares`.
 pub fn add_liquidity_by_strategy(
     ctx: Context<AddLiquidity>,
     amount_x: u64,
     amount_y: u64,
     strategy: u8,
     min_liquidity_shares: u128,
+    expected_active_bin_id: i32,
+    active_id_slippage: u32,
 ) -> Result<()> {
     let strat = Strategy::from_u8(strategy).ok_or(DlmmError::InvalidStrategy)?;
     require!(amount_x > 0 || amount_y > 0, DlmmError::ZeroAmount);
@@ -81,6 +89,14 @@ pub fn add_liquidity_by_strategy(
         );
         (pair.active_bin_id, pair.bin_step)
     };
+
+    // Reject if the active bin has moved outside the caller's accepted window.
+    let lo = expected_active_bin_id as i64 - active_id_slippage as i64;
+    let hi = expected_active_bin_id as i64 + active_id_slippage as i64;
+    require!(
+        (active_bin_id as i64) >= lo && (active_bin_id as i64) <= hi,
+        DlmmError::ActiveBinIdMoved
+    );
 
     let total_shares: u128;
     {
@@ -125,11 +141,17 @@ pub fn add_liquidity_by_strategy(
             let bin = &mut arr.bins[slot];
 
             let shares = if bin.liquidity_supply == 0 {
+                // With adds only, supply == 0 implies the bin is empty. NOTE
+                // for #34 (remove): a full withdrawal must zero the bin's
+                // reserves too, or fold any dust here, so a fresh depositor
+                // can't inherit leftover reserves for free.
                 l_added
             } else {
-                // L already in the bin, at the same price.
+                // L already in the bin, at the same price. Round the
+                // denominator Up (and l_added Down, above) so shares never
+                // round in the depositor's favor.
                 let l_before = price
-                    .mul_int(bin.amount_x as u128, Rounding::Down)
+                    .mul_int(bin.amount_x as u128, Rounding::Up)
                     .ok_or(DlmmError::MathOverflow)?
                     .checked_add(bin.amount_y as u128)
                     .ok_or(DlmmError::MathOverflow)?;

@@ -32,6 +32,8 @@ pub enum DlmmError {
     Unauthorized,
     #[msg("Slippage tolerance exceeded")]
     SlippageExceeded,
+    #[msg("Active bin moved outside the accepted range")]
+    ActiveBinIdMoved,
     #[msg("Insufficient liquidity for the requested operation")]
     InsufficientLiquidity,
     #[msg("Amount must be greater than zero")]

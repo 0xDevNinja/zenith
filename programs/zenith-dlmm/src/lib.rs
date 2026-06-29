@@ -60,12 +60,15 @@ pub mod zenith_dlmm {
 
     /// Add liquidity to a position, shaped across its bins by `strategy`
     /// (0 = Spot, 1 = Curve, 2 = BidAsk).
+    #[allow(clippy::too_many_arguments)]
     pub fn add_liquidity_by_strategy(
         ctx: Context<AddLiquidity>,
         amount_x: u64,
         amount_y: u64,
         strategy: u8,
         min_liquidity_shares: u128,
+        expected_active_bin_id: i32,
+        active_id_slippage: u32,
     ) -> Result<()> {
         instructions::add_liquidity_by_strategy(
             ctx,
@@ -73,6 +76,8 @@ pub mod zenith_dlmm {
             amount_y,
             strategy,
             min_liquidity_shares,
+            expected_active_bin_id,
+            active_id_slippage,
         )
     }
 
