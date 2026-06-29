@@ -124,6 +124,14 @@ async fn protocol_fees(banks: &mut BanksClient, lb_pair: &Pubkey) -> (u64, u64) 
     (x, y)
 }
 
+/// Oracle `active_size` (u16) read by byte offset: 8 (disc) + 2048 (observations)
+/// + 32 (lb_pair) + 2 (length).
+async fn oracle_active_size(banks: &mut BanksClient, oracle: &Pubkey) -> u16 {
+    let acc = banks.get_account(*oracle).await.unwrap().unwrap();
+    let off = 8 + 2048 + 32 + 2;
+    u16::from_le_bytes(acc.data[off..off + 2].try_into().unwrap())
+}
+
 fn ix(accounts: impl ToAccountMetas, data: impl InstructionData) -> Instruction {
     Instruction {
         program_id: zenith_dlmm::ID,
@@ -168,6 +176,7 @@ async fn full_m4_lifecycle() {
     let (reserve_y, _) = zenith_dlmm::pda::reserve_pda(&lb_pair, &mint_y);
     let (bin_array_0, _) = zenith_dlmm::pda::bin_array_pda(&lb_pair, 0);
     let (bin_array_neg1, _) = zenith_dlmm::pda::bin_array_pda(&lb_pair, -1);
+    let (oracle, _) = zenith_dlmm::pda::oracle_pda(&lb_pair);
 
     // 1) initialize the pair at active bin 0.
     send(
@@ -327,6 +336,23 @@ async fn full_m4_lifecycle() {
         total_y
     );
 
+    // Create the TWAP oracle (length 4) so swaps record into it.
+    send(
+        &mut banks,
+        &[ix(
+            zenith_dlmm::accounts::InitializeOracle {
+                payer: payer.pubkey(),
+                lb_pair,
+                oracle,
+                system_program: solana_sdk::system_program::ID,
+            },
+            zenith_dlmm::instruction::InitializeOracle { length: 4 },
+        )],
+        &payer,
+        &[&payer],
+    )
+    .await;
+
     // helper to build a swap with bin arrays appended as remaining accounts.
     let swap_ix = |dir: u8, amount: u64, threshold: u64, arrays: &[Pubkey]| {
         let mut instr = ix(
@@ -339,6 +365,7 @@ async fn full_m4_lifecycle() {
                 user_token_x: user_x,
                 user_token_y: user_y,
                 token_program: spl_token::ID,
+                oracle: Some(oracle),
             },
             zenith_dlmm::instruction::Swap {
                 direction: dir,
@@ -414,6 +441,12 @@ async fn full_m4_lifecycle() {
     assert_eq!(
         balance(&mut banks, &user_y).await + balance(&mut banks, &reserve_y).await,
         total_y
+    );
+
+    // The oracle recorded the swaps (at least the first observation).
+    assert!(
+        oracle_active_size(&mut banks, &oracle).await >= 1,
+        "oracle did not record any swap"
     );
 
     // 5d) protocol fee: the 20%-rate split accrued protocol fees in both tokens
