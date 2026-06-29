@@ -119,6 +119,7 @@ pub fn swap<'info>(
     let mut total_out: u64 = 0;
     let mut cur = active_bin_id;
     let mut new_active = active_bin_id;
+    let mut bins_crossed: usize = 0;
 
     'walk: while budget > 0 {
         let arr_index = BinArray::index_of(cur);
@@ -132,6 +133,13 @@ pub fn swap<'info>(
             if budget == 0 {
                 break 'walk;
             }
+            // Bound total bins touched so a thin-liquidity walk fails cleanly
+            // instead of silently exhausting the compute budget.
+            bins_crossed += 1;
+            require!(
+                bins_crossed <= crate::constants::MAX_BINS_PER_SWAP,
+                DlmmError::SwapTooManyBins
+            );
             let price =
                 bin_price(bin_step, cur, Rounding::Down).ok_or(DlmmError::BinIdOutOfRange)?;
             let slot = arr.slot_of(cur).ok_or(DlmmError::BinArrayIndexMismatch)?;
@@ -181,13 +189,18 @@ pub fn swap<'info>(
                 SwapMode::ExactOut => fill.out,
             };
 
-            if !fill.drained {
-                // Order filled inside this bin; the price stays here.
+            if !fill.drained || budget == 0 {
+                // Order filled — either inside this bin, or this drain finished
+                // it. Stop on the current bin; only cross when work remains, so
+                // exactly draining the band-edge bin doesn't spuriously revert
+                // on an out-of-band cross. The active bin may sit on a just-
+                // drained (empty) bin; the next swap crosses past it.
                 new_active = cur;
                 break 'walk;
             }
 
-            // Bin drained — cross to the next one (down for XtoY, up for YtoX).
+            // Bin drained with work left — cross to the next one (down for XtoY,
+            // up for YtoX).
             cur = match dir {
                 Direction::XtoY => cur.checked_sub(1).ok_or(DlmmError::BinIdOutOfRange)?,
                 Direction::YtoX => cur.checked_add(1).ok_or(DlmmError::BinIdOutOfRange)?,

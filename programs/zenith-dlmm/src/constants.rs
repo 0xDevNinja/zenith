@@ -27,3 +27,9 @@ pub const MAX_BINS_PER_ARRAY: usize = 70;
 /// position's `[lower_bin_id, upper_bin_id]` range is inclusive and capped to
 /// this width so its per-bin share array stays fixed-size.
 pub const MAX_BINS_PER_POSITION: usize = 70;
+
+/// Maximum number of bins a single swap may cross. A swap walking thin
+/// liquidity would otherwise iterate until the compute budget aborts the
+/// transaction opaquely; this turns that into a clean error so the trader can
+/// split the order. Sized well above any realistic single swap.
+pub const MAX_BINS_PER_SWAP: usize = 500;
