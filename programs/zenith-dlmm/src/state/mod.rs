@@ -53,12 +53,23 @@ mod tests {
 
     #[test]
     fn account_sizes_match_documented_layout() {
-        assert_eq!(core::mem::size_of::<LbPair>(), 352);
+        assert_eq!(core::mem::size_of::<LbPair>(), 384);
         assert_eq!(core::mem::size_of::<Bin>(), 64);
         assert_eq!(core::mem::size_of::<BinArray>(), 70 * 64 + 32 + 8 + 1 + 7);
         assert_eq!(core::mem::size_of::<BinArray>(), 4528);
         assert_eq!(core::mem::size_of::<PositionBinData>(), 48);
         assert_eq!(core::mem::size_of::<Position>(), 4592);
+    }
+
+    #[test]
+    fn lb_pair_active_bin_id_offset_is_stable() {
+        // The integration test reads active_bin_id by raw offset; pin it here so
+        // adding fields can't silently shift it. 8 (disc) + 96 (u128 x6) +
+        // 160 (Pubkey x5) + 72 (u64 x9) = 336.
+        let base: LbPair = bytemuck::Zeroable::zeroed();
+        let ptr = &base as *const LbPair as usize;
+        let field = &base.active_bin_id as *const i32 as usize;
+        assert_eq!(field - ptr, 328); // data offset (add 8 for the discriminator)
     }
 
     #[test]

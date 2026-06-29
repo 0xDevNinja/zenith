@@ -10,6 +10,7 @@ use anchor_lang::prelude::*;
 pub mod constants;
 pub mod errors;
 pub mod events;
+pub mod fee;
 pub mod instructions;
 pub mod pda;
 pub mod share_math;
@@ -36,14 +37,35 @@ declare_id!("7pxn8tEm44gXjfPH9YXsLywuYpAbgbxq9nPwG1XQczsz");
 pub mod zenith_dlmm {
     use super::*;
 
-    /// Create an empty liquidity-book pair at a chosen bin step + active bin.
+    /// Create an empty liquidity-book pair at a chosen bin step + active bin,
+    /// with its base fee and volatility-fee control parameters.
+    #[allow(clippy::too_many_arguments)]
     pub fn initialize_lb_pair(
         ctx: Context<InitializeLbPair>,
         bin_step: u16,
         active_bin_id: i32,
         base_fee_bps: u16,
+        variable_fee_control: u32,
+        max_volatility_accumulator: u32,
+        filter_period: u32,
+        decay_period: u32,
+        volatility_reduction_factor: u16,
+        max_dynamic_fee_bps: u16,
     ) -> Result<()> {
-        instructions::initialize_lb_pair(ctx, bin_step, active_bin_id, base_fee_bps)
+        instructions::initialize_lb_pair(
+            ctx,
+            bin_step,
+            active_bin_id,
+            base_fee_bps,
+            instructions::DynamicFeeParams {
+                variable_fee_control,
+                max_volatility_accumulator,
+                filter_period,
+                decay_period,
+                volatility_reduction_factor,
+                max_dynamic_fee_bps,
+            },
+        )
     }
 
     /// Allocate a bin array (a packed run of bins) for a pair.

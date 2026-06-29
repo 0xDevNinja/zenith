@@ -66,9 +66,14 @@ impl TokenFlavor {
 #[repr(C)]
 pub struct LbPair {
     // --- 16-byte aligned (u128) ---
-    /// Reserved 16-byte slots for M4b dynamic-fee accumulators / per-token fee
-    /// growth (Q64.64). Zero today.
-    pub reserved_u128: [u128; 6],
+    /// Volatility accumulator (bps): grows as the active bin moves from
+    /// `index_reference`, decays when idle. Drives the variable fee.
+    pub volatility_accumulator: u128,
+    /// Decayed accumulator carried into the next volatility window (the base the
+    /// next move adds onto).
+    pub volatility_reference: u128,
+    /// Reserved 16-byte slots (e.g. per-bin fee growth in a later issue).
+    pub reserved_u128: [u128; 4],
 
     // --- 1-byte aligned (Pubkey = [u8; 32]) ---
     /// Token X mint (the canonically smaller of the two mints).
@@ -89,21 +94,41 @@ pub struct LbPair {
     pub protocol_fee_y: u64,
     /// Slot/timestamp at which the pair becomes tradable.
     pub activation_point: u64,
+    /// Slot of the last volatility-state update.
+    pub last_update_slot: u64,
     /// Reserved 8-byte slots for forward-compatible fields.
-    pub reserved_u64: [u64; 6],
+    pub reserved_u64: [u64; 5],
 
-    // --- 4-byte aligned (i32) ---
+    // --- 4-byte aligned (i32 / u32) ---
     /// The bin currently holding the market price. Signed: bins extend in both
     /// directions from bin 0 (price 1.0).
     pub active_bin_id: i32,
+    /// Reference bin the volatility move is measured from (re-set when a
+    /// volatility window begins).
+    pub index_reference: i32,
+    /// Scales the variable fee: `variable = va^2 * control / 1e9`. Zero
+    /// disables the dynamic fee.
+    pub variable_fee_control: u32,
+    /// Ceiling on the volatility accumulator (caps the surcharge).
+    pub max_volatility_accumulator: u32,
+    /// Slots within which the reference bin is NOT reset (high-frequency
+    /// filter): rapid swaps accumulate against a stable reference.
+    pub filter_period: u32,
+    /// Slots after which an idle pair's volatility fully resets to zero.
+    pub decay_period: u32,
 
     // --- 2-byte aligned (u16) ---
     /// Per-bin price spacing in basis points: adjacent bins differ in price by
     /// a factor of `1 + bin_step/10000`.
     pub bin_step: u16,
-    /// Snapshot of the base swap fee in basis points (the live fee math lands
-    /// in M4b).
+    /// Base swap fee in basis points (the constant floor; the live fee adds the
+    /// volatility surcharge on top).
     pub base_fee_bps: u16,
+    /// Fraction (bps) the accumulator decays to between the filter and decay
+    /// windows.
+    pub volatility_reduction_factor: u16,
+    /// Hard cap on the variable surcharge, bps.
+    pub max_dynamic_fee_bps: u16,
 
     // --- 1-byte ---
     /// Lifecycle status (see [`PairStatus`]).
@@ -121,7 +146,7 @@ pub struct LbPair {
     /// Token program flavor for mint Y: 0 = SPL Token, 1 = Token-2022.
     pub token_y_flag: u8,
     /// Trailing padding to keep the struct 16-byte sized (no Pod padding).
-    pub padding: [u8; 9],
+    pub padding: [u8; 17],
 }
 
 impl LbPair {

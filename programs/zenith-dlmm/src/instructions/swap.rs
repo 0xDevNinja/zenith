@@ -65,8 +65,13 @@ pub fn swap<'info>(
 
     let lb_pair_key = ctx.accounts.lb_pair.key();
 
-    // --- read the pair, verify reserves ---
-    let (active_bin_id, bin_step, base_fee_bps) = {
+    let now = Clock::get()?.slot;
+
+    // --- read the pair, verify reserves, derive the fee for this swap ---
+    // The variable fee is computed on the PRE-swap active bin (this swap pays
+    // for volatility built by prior trades; its own bin movement surcharges the
+    // next swap), so there is no circular dependency with the swap output.
+    let (active_bin_id, bin_step, total_fee_bps, fee_state) = {
         let pair = ctx.accounts.lb_pair.load()?;
         require!(pair.is_active(), DlmmError::PairNotActive);
         require_keys_eq!(
@@ -79,7 +84,23 @@ pub fn swap<'info>(
             pair.reserve_y,
             DlmmError::Unauthorized
         );
-        (pair.active_bin_id, pair.bin_step, pair.base_fee_bps as u128)
+        let elapsed = now.saturating_sub(pair.last_update_slot);
+        let state = crate::fee::compute_variable_fee(
+            pair.active_bin_id,
+            pair.index_reference,
+            pair.volatility_accumulator,
+            pair.volatility_reference,
+            elapsed,
+            pair.filter_period,
+            pair.decay_period,
+            pair.volatility_reduction_factor,
+            pair.max_volatility_accumulator,
+            pair.bin_step,
+            pair.variable_fee_control,
+            pair.max_dynamic_fee_bps,
+        );
+        let total = crate::fee::total_fee_bps(pair.base_fee_bps, state.variable_fee_bps);
+        (pair.active_bin_id, pair.bin_step, total as u128, state)
     };
 
     // Collect and validate the bin arrays passed as remaining accounts.
@@ -102,7 +123,7 @@ pub fn swap<'info>(
     // through the bins.
     let (walk_budget, gross_in_known, fee_known) = match swap_mode {
         SwapMode::ExactIn => {
-            let fee = mul_div(amount as u128, base_fee_bps, BPS_DENOMINATOR, Rounding::Up)
+            let fee = mul_div(amount as u128, total_fee_bps, BPS_DENOMINATOR, Rounding::Up)
                 .map_err(|_| DlmmError::MathOverflow)? as u64;
             let net = amount.checked_sub(fee).ok_or(DlmmError::MathOverflow)?;
             require!(net > 0, DlmmError::ZeroAmount);
@@ -239,8 +260,8 @@ pub fn swap<'info>(
             // gross = net / (1 - rate); fee taken on top of the net input.
             let fee = mul_div(
                 total_in as u128,
-                base_fee_bps,
-                BPS_DENOMINATOR - base_fee_bps,
+                total_fee_bps,
+                BPS_DENOMINATOR - total_fee_bps,
                 Rounding::Up,
             )
             .map_err(|_| DlmmError::MathOverflow)? as u64;
@@ -250,10 +271,16 @@ pub fn swap<'info>(
         }
     };
 
-    // --- write pair: active bin + accrued protocol fee on the input token ---
+    // --- write pair: active bin, volatility state, accrued protocol fee ---
     {
         let mut pair = ctx.accounts.lb_pair.load_mut()?;
         pair.active_bin_id = new_active;
+        // Persist the (pre-swap-derived) volatility window; this swap's own bin
+        // movement is folded in on the next swap via `index_reference`.
+        pair.volatility_accumulator = fee_state.volatility_accumulator;
+        pair.volatility_reference = fee_state.volatility_reference;
+        pair.index_reference = fee_state.index_reference;
+        pair.last_update_slot = now;
         match dir {
             Direction::XtoY => {
                 pair.protocol_fee_x = pair
@@ -325,6 +352,7 @@ pub fn swap<'info>(
         amount_out,
         fee,
         active_bin_id: new_active,
+        volatility_accumulator: fee_state.volatility_accumulator,
     });
 
     Ok(())

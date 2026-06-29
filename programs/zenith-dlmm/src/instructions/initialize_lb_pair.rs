@@ -92,12 +92,29 @@ pub fn validate_init_params(bin_step: u16, active_bin_id: i32, base_fee_bps: u16
     Ok(())
 }
 
+/// Volatility-fee control parameters supplied at pair creation.
+pub struct DynamicFeeParams {
+    /// Scales the variable fee (`va^2 * control / 1e9`); 0 disables it.
+    pub variable_fee_control: u32,
+    /// Ceiling on the volatility accumulator.
+    pub max_volatility_accumulator: u32,
+    /// High-frequency filter window (slots) — reference bin held fixed within.
+    pub filter_period: u32,
+    /// Idle window (slots) after which volatility fully resets.
+    pub decay_period: u32,
+    /// Fraction (bps) the accumulator decays to between filter and decay.
+    pub volatility_reduction_factor: u16,
+    /// Hard cap on the variable surcharge, bps.
+    pub max_dynamic_fee_bps: u16,
+}
+
 /// Create the pair and its reserve vaults.
 pub fn initialize_lb_pair(
     ctx: Context<InitializeLbPair>,
     bin_step: u16,
     active_bin_id: i32,
     base_fee_bps: u16,
+    fee: DynamicFeeParams,
 ) -> Result<()> {
     // Canonical pair key requires ascending mint order (and rejects identical
     // mints), so the on-chain PDA — seeded with the mints in submitted order —
@@ -112,10 +129,14 @@ pub fn initialize_lb_pair(
         .ok_or(DlmmError::BinIdOutOfRange)?
         .to_bits();
 
+    let now = Clock::get()?.slot;
     let lb_pair_key = ctx.accounts.lb_pair.key();
     {
         let mut pair = ctx.accounts.lb_pair.load_init()?;
-        pair.reserved_u128 = [0u128; 6];
+        // Volatility state starts calm, referenced at the opening bin.
+        pair.volatility_accumulator = 0;
+        pair.volatility_reference = 0;
+        pair.reserved_u128 = [0u128; 4];
         pair.token_x_mint = ctx.accounts.token_x_mint.key();
         pair.token_y_mint = ctx.accounts.token_y_mint.key();
         pair.reserve_x = ctx.accounts.reserve_x.key();
@@ -123,11 +144,19 @@ pub fn initialize_lb_pair(
         pair.creator = ctx.accounts.creator.key();
         pair.protocol_fee_x = 0;
         pair.protocol_fee_y = 0;
-        pair.activation_point = Clock::get()?.slot;
-        pair.reserved_u64 = [0u64; 6];
+        pair.activation_point = now;
+        pair.last_update_slot = now;
+        pair.reserved_u64 = [0u64; 5];
         pair.active_bin_id = active_bin_id;
+        pair.index_reference = active_bin_id;
+        pair.variable_fee_control = fee.variable_fee_control;
+        pair.max_volatility_accumulator = fee.max_volatility_accumulator;
+        pair.filter_period = fee.filter_period;
+        pair.decay_period = fee.decay_period;
         pair.bin_step = bin_step;
         pair.base_fee_bps = base_fee_bps;
+        pair.volatility_reduction_factor = fee.volatility_reduction_factor;
+        pair.max_dynamic_fee_bps = fee.max_dynamic_fee_bps;
         pair.status = PairStatus::Active as u8;
         pair.pair_authority_bump = ctx.bumps.pair_authority;
         pair.pair_bump = ctx.bumps.lb_pair;
@@ -135,7 +164,7 @@ pub fn initialize_lb_pair(
         pair.reserve_y_bump = ctx.bumps.reserve_y;
         pair.token_x_flag = TokenFlavor::SplToken as u8;
         pair.token_y_flag = TokenFlavor::SplToken as u8;
-        pair.padding = [0u8; 9];
+        pair.padding = [0u8; 17];
     }
 
     emit!(LbPairInitialized {
