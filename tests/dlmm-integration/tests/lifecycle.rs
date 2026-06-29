@@ -568,6 +568,50 @@ async fn full_m4_lifecycle() {
         total_y
     );
 
+    // 7b) claim each position's accrued LP fees (the fee growth the swaps left
+    //     in the bins). close_position requires no pending fees, so this must
+    //     happen first; it also proves fees were actually earned.
+    let mk_claim_fee = |position: Pubkey, bin_array: Pubkey| zenith_dlmm::accounts::ClaimFee {
+        owner: payer.pubkey(),
+        lb_pair,
+        position,
+        bin_array,
+        pair_authority,
+        reserve_x,
+        reserve_y,
+        user_token_x: user_x,
+        user_token_y: user_y,
+        token_program: spl_token::ID,
+    };
+    let (cx0, cy0) = (
+        balance(&mut banks, &user_x).await,
+        balance(&mut banks, &user_y).await,
+    );
+    for (position, bin_array) in [(position_a, bin_array_0), (position_b, bin_array_neg1)] {
+        send(
+            &mut banks,
+            &[ix(
+                mk_claim_fee(position, bin_array),
+                zenith_dlmm::instruction::ClaimFee {},
+            )],
+            &payer,
+            &[&payer],
+        )
+        .await;
+    }
+    let gained_x = balance(&mut banks, &user_x).await - cx0;
+    let gained_y = balance(&mut banks, &user_y).await - cy0;
+    assert!(gained_x > 0 || gained_y > 0, "no LP fees were claimed");
+    // Conservation still holds after the fee payout.
+    assert_eq!(
+        balance(&mut banks, &user_x).await + balance(&mut banks, &reserve_x).await,
+        total_x
+    );
+    assert_eq!(
+        balance(&mut banks, &user_y).await + balance(&mut banks, &reserve_y).await,
+        total_y
+    );
+
     // 8) close both positions (now empty); rent returns to the owner.
     for position in [position_a, position_b] {
         send(
