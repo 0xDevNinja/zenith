@@ -13,7 +13,7 @@
 //! surcharges the next swap. This avoids any circular dependency between the fee
 //! and the swap's output.
 
-use zenith_math::{mul_div, mul_shr, shl_div, Rounding, SCALE_OFFSET};
+use zenith_math::{mul_div, mul_shr, shl_div, MathResult, Rounding, SCALE_OFFSET};
 
 /// Basis-points denominator.
 pub const BPS_DENOMINATOR: u128 = 10_000;
@@ -95,10 +95,11 @@ pub fn fee_growth_delta(lp_fee: u64, supply: u128) -> u128 {
 /// Token fees owed for `shares` between a `checkpoint` and the current per-share
 /// `growth` (both Q64.64 raw bits): `shares * (growth - checkpoint) >> 64`,
 /// rounded down. The subtraction wraps, so it stays correct after the growth
-/// accumulator overflows u128.
-pub fn owed_fee(shares: u128, growth: u128, checkpoint: u128) -> u128 {
+/// accumulator overflows u128. Errors (rather than silently forfeiting) if the
+/// product somehow exceeds u128.
+pub fn owed_fee(shares: u128, growth: u128, checkpoint: u128) -> MathResult<u128> {
     let delta = growth.wrapping_sub(checkpoint);
-    mul_shr(shares, delta, SCALE_OFFSET, Rounding::Down).unwrap_or(0)
+    mul_shr(shares, delta, SCALE_OFFSET, Rounding::Down)
 }
 
 /// Volatility state folded forward by a swap; the caller persists all four onto
@@ -203,15 +204,15 @@ mod tests {
     fn fee_growth_and_owed_round_trip() {
         // 1000 fee over a bin with 4 shares -> each share owed 250.
         let g = fee_growth_delta(1000, 4);
-        assert_eq!(owed_fee(4, g, 0), 1000); // all shares
-        assert_eq!(owed_fee(1, g, 0), 250); // one share
-                                            // checkpoint already at growth -> nothing owed.
-        assert_eq!(owed_fee(4, g, g), 0);
+        assert_eq!(owed_fee(4, g, 0).unwrap(), 1000); // all shares
+        assert_eq!(owed_fee(1, g, 0).unwrap(), 250); // one share
+                                                     // checkpoint already at growth -> nothing owed.
+        assert_eq!(owed_fee(4, g, g).unwrap(), 0);
         // no supply / no fee -> zero growth.
         assert_eq!(fee_growth_delta(0, 4), 0);
         assert_eq!(fee_growth_delta(1000, 0), 0);
         // splitting the supply's shares never owes more than the fee (floor each).
-        let total: u128 = (0..4).map(|_| owed_fee(1, g, 0)).sum();
+        let total: u128 = (0..4).map(|_| owed_fee(1, g, 0).unwrap()).sum();
         assert!(total <= 1000);
     }
 
@@ -220,7 +221,7 @@ mod tests {
         // checkpoint near u128::MAX, growth wrapped past 0.
         let checkpoint = u128::MAX - 10;
         let growth = fee_growth_delta(100, 2).wrapping_add(checkpoint);
-        assert_eq!(owed_fee(2, growth, checkpoint), 100);
+        assert_eq!(owed_fee(2, growth, checkpoint).unwrap(), 100);
     }
 
     #[test]
