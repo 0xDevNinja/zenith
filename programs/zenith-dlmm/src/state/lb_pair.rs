@@ -129,6 +129,9 @@ pub struct LbPair {
     pub volatility_reduction_factor: u16,
     /// Hard cap on the variable surcharge, bps.
     pub max_dynamic_fee_bps: u16,
+    /// Protocol's share of each swap fee, in basis points (the rest is the LP
+    /// share). Claimed by the pair authority via `claim_protocol_fee`.
+    pub protocol_fee_rate: u16,
 
     // --- 1-byte ---
     /// Lifecycle status (see [`PairStatus`]).
@@ -146,7 +149,7 @@ pub struct LbPair {
     /// Token program flavor for mint Y: 0 = SPL Token, 1 = Token-2022.
     pub token_y_flag: u8,
     /// Trailing padding to keep the struct 16-byte sized (no Pod padding).
-    pub padding: [u8; 17],
+    pub padding: [u8; 15],
 }
 
 impl LbPair {

@@ -138,6 +138,7 @@ pub fn initialize_lb_pair(
     bin_step: u16,
     active_bin_id: i32,
     base_fee_bps: u16,
+    protocol_fee_rate: u16,
     fee: DynamicFeeParams,
 ) -> Result<()> {
     // Canonical pair key requires ascending mint order (and rejects identical
@@ -149,6 +150,11 @@ pub fn initialize_lb_pair(
     );
     validate_init_params(bin_step, active_bin_id, base_fee_bps)?;
     validate_fee_params(&fee)?;
+    // The protocol's share of the fee may be up to 100% of it.
+    require!(
+        protocol_fee_rate <= MAX_FEE_BPS,
+        DlmmError::InvalidFeeConfig
+    );
 
     let active_bin_price = bin_price(bin_step, active_bin_id, Rounding::Down)
         .ok_or(DlmmError::BinIdOutOfRange)?
@@ -182,6 +188,7 @@ pub fn initialize_lb_pair(
         pair.base_fee_bps = base_fee_bps;
         pair.volatility_reduction_factor = fee.volatility_reduction_factor;
         pair.max_dynamic_fee_bps = fee.max_dynamic_fee_bps;
+        pair.protocol_fee_rate = protocol_fee_rate;
         pair.status = PairStatus::Active as u8;
         pair.pair_authority_bump = ctx.bumps.pair_authority;
         pair.pair_bump = ctx.bumps.lb_pair;
@@ -189,7 +196,7 @@ pub fn initialize_lb_pair(
         pair.reserve_y_bump = ctx.bumps.reserve_y;
         pair.token_x_flag = TokenFlavor::SplToken as u8;
         pair.token_y_flag = TokenFlavor::SplToken as u8;
-        pair.padding = [0u8; 17];
+        pair.padding = [0u8; 15];
     }
 
     emit!(LbPairInitialized {

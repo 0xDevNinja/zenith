@@ -74,6 +74,14 @@ pub fn total_fee_bps(base_fee_bps: u16, variable_fee_bps: u16) -> u16 {
     (base_fee_bps as u32 + variable_fee_bps as u32).min(MAX_FEE_BPS as u32 - 1) as u16
 }
 
+/// Split a swap fee into `(protocol_share, lp_share)` by `protocol_fee_rate`
+/// (bps). The protocol share rounds down (favoring LPs) and the two parts sum
+/// to exactly `total_fee`.
+pub fn split_protocol_fee(total_fee: u64, protocol_fee_rate: u16) -> (u64, u64) {
+    let protocol = ((total_fee as u128 * protocol_fee_rate as u128) / BPS_DENOMINATOR) as u64;
+    (protocol, total_fee - protocol)
+}
+
 /// Volatility state folded forward by a swap; the caller persists all four onto
 /// the pair.
 pub struct VariableFeeState {
@@ -170,6 +178,19 @@ mod tests {
     fn total_clamps_below_full() {
         assert_eq!(total_fee_bps(30, 20), 50);
         assert_eq!(total_fee_bps(9000, 5000), MAX_FEE_BPS - 1);
+    }
+
+    #[test]
+    fn protocol_split_is_exact() {
+        // 20% protocol of 1000 -> (200, 800), sums to total.
+        assert_eq!(split_protocol_fee(1000, 2000), (200, 800));
+        // rounds the protocol share down (LP-favoring): 1/3 of 100 -> 33.
+        let (p, lp) = split_protocol_fee(100, 3333);
+        assert_eq!(p, 33);
+        assert_eq!(p + lp, 100);
+        // edges
+        assert_eq!(split_protocol_fee(1000, 0), (0, 1000)); // all LP
+        assert_eq!(split_protocol_fee(1000, 10_000), (1000, 0)); // all protocol
     }
 
     #[test]

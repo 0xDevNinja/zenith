@@ -45,6 +45,7 @@ pub mod zenith_dlmm {
         bin_step: u16,
         active_bin_id: i32,
         base_fee_bps: u16,
+        protocol_fee_rate: u16,
         variable_fee_control: u32,
         max_volatility_accumulator: u32,
         filter_period: u32,
@@ -57,6 +58,7 @@ pub mod zenith_dlmm {
             bin_step,
             active_bin_id,
             base_fee_bps,
+            protocol_fee_rate,
             instructions::DynamicFeeParams {
                 variable_fee_control,
                 max_volatility_accumulator,
@@ -131,5 +133,10 @@ pub mod zenith_dlmm {
         other_amount_threshold: u64,
     ) -> Result<()> {
         instructions::swap(ctx, direction, mode, amount, other_amount_threshold)
+    }
+
+    /// Claim the pair's accrued protocol fees (pair authority only).
+    pub fn claim_protocol_fee(ctx: Context<ClaimProtocolFee>) -> Result<()> {
+        instructions::claim_protocol_fee(ctx)
     }
 }
