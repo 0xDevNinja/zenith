@@ -14,6 +14,12 @@ pub const RESERVE_SEED: &[u8] = b"reserve";
 pub const BIN_ARRAY_SEED: &[u8] = b"bin_array";
 /// A liquidity position, keyed by a caller-supplied base pubkey.
 pub const POSITION_SEED: &[u8] = b"position";
+/// The price oracle (TWAP ring buffer) for a pair.
+pub const ORACLE_SEED: &[u8] = b"oracle";
+
+/// Maximum observations a pair's oracle ring buffer can hold (bounds the
+/// account size; the configured `length` is `1..=ORACLE_CAPACITY`).
+pub const ORACLE_CAPACITY: usize = 64;
 
 /// Number of bins packed into a single [`crate::state::BinArray`] account.
 ///

@@ -2,10 +2,12 @@
 
 mod bin_array;
 mod lb_pair;
+mod oracle;
 mod position;
 
 pub use bin_array::{Bin, BinArray};
 pub use lb_pair::{LbPair, PairStatus, TokenFlavor};
+pub use oracle::{Observation, Oracle};
 pub use position::{Position, PositionBinData};
 
 #[cfg(test)]
@@ -59,6 +61,10 @@ mod tests {
         assert_eq!(core::mem::size_of::<BinArray>(), 4528);
         assert_eq!(core::mem::size_of::<PositionBinData>(), 48);
         assert_eq!(core::mem::size_of::<Position>(), 4592);
+        assert_eq!(core::mem::size_of::<Observation>(), 32);
+        assert_eq!(core::mem::size_of::<Oracle>(), 64 * 32 + 32 + 6 + 1 + 9);
+        assert_eq!(core::mem::size_of::<Oracle>(), 2096);
+        assert_eq!(core::mem::align_of::<Oracle>(), 16);
     }
 
     #[test]
