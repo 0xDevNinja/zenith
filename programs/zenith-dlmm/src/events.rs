@@ -19,6 +19,19 @@ pub struct LbPairInitialized {
     pub active_bin_price: u128,
 }
 
+/// Emitted when a position's accrued LP fees are claimed.
+#[event]
+pub struct FeesClaimed {
+    /// The pair.
+    pub lb_pair: Pubkey,
+    /// The position fees were claimed from.
+    pub position: Pubkey,
+    /// Token X fees paid out.
+    pub amount_x: u64,
+    /// Token Y fees paid out.
+    pub amount_y: u64,
+}
+
 /// Emitted when the protocol's accrued fees are claimed.
 #[event]
 pub struct ProtocolFeeClaimed {

@@ -139,4 +139,9 @@ pub mod zenith_dlmm {
     pub fn claim_protocol_fee(ctx: Context<ClaimProtocolFee>) -> Result<()> {
         instructions::claim_protocol_fee(ctx)
     }
+
+    /// Claim a position's accrued LP fees without withdrawing liquidity.
+    pub fn claim_fee(ctx: Context<ClaimFee>) -> Result<()> {
+        instructions::claim_fee(ctx)
+    }
 }

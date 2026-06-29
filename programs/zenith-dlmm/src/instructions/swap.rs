@@ -315,19 +315,13 @@ pub fn swap<'info>(
                 .slot_of(*bin_id)
                 .ok_or(DlmmError::BinArrayIndexMismatch)?;
             let bin = &mut arr.bins[slot];
+            // Accrue the fee as per-share growth (claimable via claim_fee), not
+            // into the bin's tradable reserve — the lp_bin tokens stay in the
+            // vault until claimed. The input token is X for XtoY, Y for YtoX.
+            let delta = crate::fee::fee_growth_delta(lp_bin, bin.liquidity_supply);
             match dir {
-                Direction::XtoY => {
-                    bin.amount_x = bin
-                        .amount_x
-                        .checked_add(lp_bin)
-                        .ok_or(DlmmError::MathOverflow)?
-                }
-                Direction::YtoX => {
-                    bin.amount_y = bin
-                        .amount_y
-                        .checked_add(lp_bin)
-                        .ok_or(DlmmError::MathOverflow)?
-                }
+                Direction::XtoY => bin.fee_growth_x = bin.fee_growth_x.wrapping_add(delta),
+                Direction::YtoX => bin.fee_growth_y = bin.fee_growth_y.wrapping_add(delta),
             }
             lp_assigned = lp_assigned
                 .checked_add(lp_bin)
