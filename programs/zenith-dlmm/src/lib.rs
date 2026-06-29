@@ -15,6 +15,7 @@ pub mod pda;
 pub mod share_math;
 pub mod state;
 pub mod strategy;
+pub mod swap_math;
 
 pub use constants::*;
 pub use errors::DlmmError;
@@ -98,5 +99,15 @@ pub mod zenith_dlmm {
         instructions::close_position(ctx)
     }
 
-    // TODO(M4): swap.
+    /// Swap across bins (ExactIn / ExactOut), crossing the active bin as bins
+    /// drain. The bin arrays the walk needs are passed as remaining accounts.
+    pub fn swap<'info>(
+        ctx: Context<'_, '_, 'info, 'info, Swap<'info>>,
+        direction: u8,
+        mode: u8,
+        amount: u64,
+        other_amount_threshold: u64,
+    ) -> Result<()> {
+        instructions::swap(ctx, direction, mode, amount, other_amount_threshold)
+    }
 }
