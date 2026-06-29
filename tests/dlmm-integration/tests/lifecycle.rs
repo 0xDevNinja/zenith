@@ -444,6 +444,9 @@ async fn full_m4_lifecycle() {
     );
 
     // The oracle recorded the swaps (at least the first observation).
+    // (solana-program-test keeps the same slot across these txs, so repeated
+    // records collapse to one; multi-observation accumulation + wrap are covered
+    // by the oracle unit tests.)
     assert!(
         oracle_active_size(&mut banks, &oracle).await >= 1,
         "oracle did not record any swap"

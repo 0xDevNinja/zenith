@@ -123,8 +123,12 @@ impl Oracle {
     }
 
     /// Time-weighted average active bin over the last `window` slots, given the
-    /// current active bin and slot. Clamps the window to the available history;
-    /// returns `None` if there are no samples or no time has elapsed.
+    /// current active bin and slot. If the recorded history is shorter than
+    /// `window` the window is clamped to the oldest sample, so the result is the
+    /// average over the *available* span (a caller needing the exact window
+    /// should check the history depth). Rounds toward negative infinity (active
+    /// bins can be negative). Returns `None` if there are no samples or no time
+    /// has elapsed.
     pub fn twap(&self, current_active_bin: i32, now: u64, window: u64) -> Option<i64> {
         if self.active_size == 0 || window == 0 {
             return None;
@@ -140,7 +144,9 @@ impl Oracle {
         }
         let cum_start = self.cumulative_at(start, current_active_bin, now);
         let span = (now - start) as i128;
-        Some(((cum_now - cum_start) / span) as i64)
+        // Floor division (div_euclid) so a negative average rounds consistently
+        // toward -inf instead of toward zero.
+        Some((cum_now - cum_start).div_euclid(span) as i64)
     }
 }
 
@@ -175,6 +181,16 @@ mod tests {
         assert_eq!(o.twap(20, 30, 30), Some(16));
         // shorter window [20,30] is entirely bin 20 -> 20.
         assert_eq!(o.twap(20, 30, 10), Some(20));
+    }
+
+    #[test]
+    fn negative_bin_twap_floors() {
+        // bin -10 over [0,10], bin -20 over [10,30]: avg = -(100+400)/30 =
+        // -16.67 -> floor -17 (not -16, which toward-zero would give).
+        let mut o = oracle(8);
+        o.record(-10, 0);
+        o.record(-10, 10); // cumulative -100
+        assert_eq!(o.twap(-20, 30, 30), Some(-17));
     }
 
     #[test]
