@@ -40,4 +40,6 @@ pub enum DlmmError {
     ZeroAmount,
     #[msg("Position still holds liquidity")]
     PositionNotEmpty,
+    #[msg("Removal percentage must be between 1 and 10000 basis points")]
+    InvalidBps,
 }

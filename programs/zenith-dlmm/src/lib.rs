@@ -12,6 +12,7 @@ pub mod errors;
 pub mod events;
 pub mod instructions;
 pub mod pda;
+pub mod share_math;
 pub mod state;
 pub mod strategy;
 
@@ -81,5 +82,21 @@ pub mod zenith_dlmm {
         )
     }
 
-    // TODO(M4): remove_liquidity, swap.
+    /// Remove `bps`/10000 of a position's shares from each bin, returning the
+    /// pro-rata token amounts (floored by `min_*`).
+    pub fn remove_liquidity(
+        ctx: Context<RemoveLiquidity>,
+        bps: u16,
+        min_amount_x: u64,
+        min_amount_y: u64,
+    ) -> Result<()> {
+        instructions::remove_liquidity(ctx, bps, min_amount_x, min_amount_y)
+    }
+
+    /// Close an empty position and reclaim its rent.
+    pub fn close_position(ctx: Context<ClosePosition>) -> Result<()> {
+        instructions::close_position(ctx)
+    }
+
+    // TODO(M4): swap.
 }

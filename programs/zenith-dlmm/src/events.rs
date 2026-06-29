@@ -51,6 +51,34 @@ pub struct LiquidityAdded {
     pub strategy: u8,
 }
 
+/// Emitted when liquidity is removed from a position.
+#[event]
+pub struct LiquidityRemoved {
+    /// The pair.
+    pub lb_pair: Pubkey,
+    /// The position liquidity was removed from.
+    pub position: Pubkey,
+    /// Total token X returned.
+    pub amount_x: u64,
+    /// Total token Y returned.
+    pub amount_y: u64,
+    /// Total LP shares burned across the range.
+    pub shares_burned: u128,
+    /// Basis points of each bin's shares removed.
+    pub bps: u16,
+}
+
+/// Emitted when an empty position is closed and its rent reclaimed.
+#[event]
+pub struct PositionClosed {
+    /// The pair the position belonged to.
+    pub lb_pair: Pubkey,
+    /// The closed position PDA.
+    pub position: Pubkey,
+    /// The owner the rent was returned to.
+    pub owner: Pubkey,
+}
+
 /// Emitted when a bin array is allocated for a pair.
 #[event]
 pub struct BinArrayInitialized {
