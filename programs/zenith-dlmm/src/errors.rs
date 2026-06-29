@@ -26,6 +26,8 @@ pub enum DlmmError {
     InvalidStrategy,
     #[msg("Unknown swap direction or mode")]
     InvalidSwapParams,
+    #[msg("Swap crosses too many bins; split the order")]
+    SwapTooManyBins,
     #[msg("Cannot deposit this token for the position's bin range")]
     DepositTokenMismatch,
     #[msg("Pair is not active")]
