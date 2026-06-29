@@ -2,18 +2,26 @@
 //!
 //! Liquidity lives in discrete price bins (constant-sum per bin, zero in-bin
 //! slippage); a swap walks bin to bin across the book. Volatility-based dynamic
-//! fees land in M4b. Instruction handlers land in M4/M4b — this crate currently
-//! defines the on-chain account model, PDA derivation, and error set.
+//! fees land in M4b. Remaining handlers (position, add/remove liquidity, swap)
+//! land in later M4 issues.
 
 use anchor_lang::prelude::*;
 
 pub mod constants;
 pub mod errors;
+pub mod events;
+pub mod instructions;
 pub mod pda;
 pub mod state;
 
 pub use constants::*;
 pub use errors::DlmmError;
+// The `#[program]` macro resolves handlers as `crate::<name>`, so the
+// instruction free functions must be re-exported at the crate root. That glob
+// overlaps the same-named functions the macro itself generates; the overlap is
+// benign (both point at the same handlers), so the lint is allowed.
+#[allow(ambiguous_glob_reexports)]
+pub use instructions::*;
 pub use state::*;
 
 // Program ID. The matching keypair lives in target/deploy/ (gitignored);
@@ -23,6 +31,23 @@ declare_id!("7pxn8tEm44gXjfPH9YXsLywuYpAbgbxq9nPwG1XQczsz");
 
 #[program]
 pub mod zenith_dlmm {
-    // TODO(M4): initialize_lb_pair (+ bin-price wiring), initialize_bin_array,
-    // initialize_position, add_liquidity_by_strategy, remove_liquidity, swap.
+    use super::*;
+
+    /// Create an empty liquidity-book pair at a chosen bin step + active bin.
+    pub fn initialize_lb_pair(
+        ctx: Context<InitializeLbPair>,
+        bin_step: u16,
+        active_bin_id: i32,
+        base_fee_bps: u16,
+    ) -> Result<()> {
+        instructions::initialize_lb_pair(ctx, bin_step, active_bin_id, base_fee_bps)
+    }
+
+    /// Allocate a bin array (a packed run of bins) for a pair.
+    pub fn initialize_bin_array(ctx: Context<InitializeBinArray>, index: i64) -> Result<()> {
+        instructions::initialize_bin_array(ctx, index)
+    }
+
+    // TODO(M4): initialize_position, add_liquidity_by_strategy,
+    // remove_liquidity, swap.
 }

@@ -14,6 +14,8 @@ pub enum DlmmError {
     BinIdOutOfRange,
     #[msg("Invalid bin range (lower must be <= upper)")]
     InvalidBinRange,
+    #[msg("Invalid fee configuration")]
+    InvalidFeeConfig,
     #[msg("Bin range is wider than a position can hold")]
     BinRangeTooWide,
     #[msg("Bin array index does not match the requested bin id")]
