@@ -162,6 +162,13 @@ pub fn add_liquidity_by_strategy(
             // A deposit too small to earn a share would silently donate tokens.
             require!(shares > 0, DlmmError::InsufficientLiquidity);
 
+            // Settle the bin's accrued fees into the position before its share
+            // count changes — a new deposit must not earn fees that accrued
+            // before it, and a top-up must not rewrite the existing shares'
+            // earnings. (First deposit settles 0 and just seeds the checkpoint.)
+            let pos_slot = (id - lower) as usize;
+            pos.settle_bin(pos_slot, bin.fee_growth_x, bin.fee_growth_y)?;
+
             bin.amount_x = bin
                 .amount_x
                 .checked_add(x_k)
@@ -175,7 +182,6 @@ pub fn add_liquidity_by_strategy(
                 .checked_add(shares)
                 .ok_or(DlmmError::MathOverflow)?;
 
-            let pos_slot = (id - lower) as usize;
             pos.liquidity_shares[pos_slot] = pos.liquidity_shares[pos_slot]
                 .checked_add(shares)
                 .ok_or(DlmmError::MathOverflow)?;

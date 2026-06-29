@@ -112,6 +112,11 @@ pub fn remove_liquidity(
             let slot = arr.slot_of(id).ok_or(DlmmError::BinArrayIndexMismatch)?;
             let bin = &mut arr.bins[slot];
 
+            // Settle the bin's accrued fees into the position before its shares
+            // shrink, so the removed shares' earned fees are kept (as pending,
+            // claimable via claim_fee) rather than forfeited.
+            pos.settle_bin(pos_slot, bin.fee_growth_x, bin.fee_growth_y)?;
+
             let x_out =
                 tokens_for_shares(bin.amount_x, remove, bin.liquidity_supply, Rounding::Down)
                     .map_err(|_| DlmmError::MathOverflow)?;
