@@ -26,6 +26,9 @@ pub fn close_position(ctx: Context<ClosePosition>) -> Result<()> {
     let (lb_pair, position_key, owner_key) = {
         let pos = ctx.accounts.position.load()?;
         require_keys_eq!(pos.owner, ctx.accounts.owner.key(), DlmmError::Unauthorized);
+        // Empty == no shares in any bin. TODO(M4b): once fees accrue into
+        // fee_infos, also require pending fees are 0/claimed so closing can't
+        // forfeit owed fees.
         require!(pos.is_empty(), DlmmError::PositionNotEmpty);
         (pos.lb_pair, ctx.accounts.position.key(), pos.owner)
     };

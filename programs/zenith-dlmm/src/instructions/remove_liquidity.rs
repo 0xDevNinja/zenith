@@ -131,8 +131,11 @@ pub fn remove_liquidity(
                 .liquidity_supply
                 .checked_sub(remove)
                 .ok_or(DlmmError::InsufficientLiquidity)?;
-            // Last shares out: abandon any rounding dust so supply == 0 means an
-            // empty bin (a later first-depositor can't inherit leftovers).
+            // Defensive: keep the supply == 0 ⇔ empty-bin invariant that
+            // add_liquidity relies on. When supply hits 0 the final burn took
+            // the whole remaining supply, so the checked_sub above already
+            // drove the reserves to exactly 0 (ratio 1, no remainder) — this is
+            // a no-op today, and a guard if any future path leaves dust behind.
             if bin.liquidity_supply == 0 {
                 bin.amount_x = 0;
                 bin.amount_y = 0;
