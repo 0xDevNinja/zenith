@@ -16,9 +16,12 @@ use crate::constants::MAX_BINS_PER_ARRAY;
 #[repr(C)]
 #[derive(Default)]
 pub struct Bin {
-    /// Per-share fee growth in token X, reserved for M4b per-bin fee accrual.
+    /// Per-share fee growth in token X (Q64.64 raw bits), reserved for M4b
+    /// per-bin fee accrual. Compared against a position's checkpoint at the
+    /// same scale.
     pub fee_growth_x: u128,
-    /// Per-share fee growth in token Y, reserved for M4b per-bin fee accrual.
+    /// Per-share fee growth in token Y (Q64.64 raw bits), reserved for M4b
+    /// per-bin fee accrual.
     pub fee_growth_y: u128,
     /// Total LP shares minted against this bin's reserves.
     pub liquidity_supply: u128,
@@ -54,10 +57,20 @@ impl BinArray {
     }
 
     /// Inclusive `[lower, upper]` bin-id range covered by array `index`.
+    ///
+    /// Bin ids are `i32`; arithmetic is done in `i64` so it cannot overflow.
+    /// The supported price band (see `zenith_math::bin_price`) keeps real bin
+    /// ids far inside the `i32` range, so the conversion back is exact — the
+    /// `debug_assert` guards against an out-of-band index in tests.
     pub fn bounds(index: i64) -> (i32, i32) {
         let n = MAX_BINS_PER_ARRAY as i64;
         let lower = index * n;
-        (lower as i32, (lower + n - 1) as i32)
+        let upper = lower + n - 1;
+        debug_assert!(
+            lower >= i32::MIN as i64 && upper <= i32::MAX as i64,
+            "array index {index} maps outside the i32 bin-id range",
+        );
+        (lower as i32, upper as i32)
     }
 
     /// Local slot within this array's `bins` for a global `bin_id`, or `None`
