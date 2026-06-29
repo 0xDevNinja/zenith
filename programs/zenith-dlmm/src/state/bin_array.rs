@@ -56,21 +56,25 @@ impl BinArray {
         (bin_id as i64).div_euclid(MAX_BINS_PER_ARRAY as i64)
     }
 
+    /// Inclusive `[lower, upper]` bin-id range covered by array `index`, or
+    /// `None` if the range would fall outside the `i32` bin-id space.
+    ///
+    /// All arithmetic is checked, so a caller passing an extreme `index` gets
+    /// `None` rather than a silently wrapped range (the `debug_assert` that
+    /// previously guarded this is compiled out in release/BPF builds).
+    pub fn try_bounds(index: i64) -> Option<(i32, i32)> {
+        let n = MAX_BINS_PER_ARRAY as i64;
+        let lower = index.checked_mul(n)?;
+        let upper = lower.checked_add(n - 1)?;
+        Some((i32::try_from(lower).ok()?, i32::try_from(upper).ok()?))
+    }
+
     /// Inclusive `[lower, upper]` bin-id range covered by array `index`.
     ///
-    /// Bin ids are `i32`; arithmetic is done in `i64` so it cannot overflow.
-    /// The supported price band (see `zenith_math::bin_price`) keeps real bin
-    /// ids far inside the `i32` range, so the conversion back is exact — the
-    /// `debug_assert` guards against an out-of-band index in tests.
+    /// Panics if `index` is outside the `i32` bin-id space; callers handling
+    /// untrusted input should use [`Self::try_bounds`] instead.
     pub fn bounds(index: i64) -> (i32, i32) {
-        let n = MAX_BINS_PER_ARRAY as i64;
-        let lower = index * n;
-        let upper = lower + n - 1;
-        debug_assert!(
-            lower >= i32::MIN as i64 && upper <= i32::MAX as i64,
-            "array index {index} maps outside the i32 bin-id range",
-        );
-        (lower as i32, upper as i32)
+        Self::try_bounds(index).expect("array index outside the i32 bin-id range")
     }
 
     /// Local slot within this array's `bins` for a global `bin_id`, or `None`

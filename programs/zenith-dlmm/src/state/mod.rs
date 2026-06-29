@@ -159,6 +159,22 @@ mod tests {
     }
 
     #[test]
+    fn try_bounds_rejects_out_of_range_indices() {
+        // Normal indices resolve.
+        assert_eq!(
+            BinArray::try_bounds(0),
+            Some((0, MAX_BINS_PER_ARRAY as i32 - 1))
+        );
+        assert!(BinArray::try_bounds(-1).is_some());
+        // An index whose range leaves the i32 bin-id space returns None instead
+        // of silently wrapping (checked arithmetic).
+        assert_eq!(BinArray::try_bounds(i64::MAX), None);
+        assert_eq!(BinArray::try_bounds(i64::MIN), None);
+        assert_eq!(BinArray::try_bounds(i32::MAX as i64), None); // *70 overflows i32
+        assert_eq!(BinArray::try_bounds(i32::MIN as i64), None);
+    }
+
+    #[test]
     fn position_cannot_exceed_max_width() {
         // A full-width position spans exactly MAX_BINS_PER_POSITION bins, which
         // must fit the fixed share array.
