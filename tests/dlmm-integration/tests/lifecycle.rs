@@ -602,6 +602,29 @@ async fn full_m4_lifecycle() {
     let gained_x = balance(&mut banks, &user_x).await - cx0;
     let gained_y = balance(&mut banks, &user_y).await - cy0;
     assert!(gained_x > 0 || gained_y > 0, "no LP fees were claimed");
+    // A second claim pays nothing (pending zeroed, checkpoints at growth).
+    let (rx, ry) = (
+        balance(&mut banks, &user_x).await,
+        balance(&mut banks, &user_y).await,
+    );
+    send(
+        &mut banks,
+        &[ix(
+            mk_claim_fee(position_a, bin_array_0),
+            zenith_dlmm::instruction::ClaimFee {},
+        )],
+        &payer,
+        &[&payer],
+    )
+    .await;
+    assert_eq!(
+        (
+            balance(&mut banks, &user_x).await,
+            balance(&mut banks, &user_y).await
+        ),
+        (rx, ry),
+        "re-claim paid out again"
+    );
     // Conservation still holds after the fee payout.
     assert_eq!(
         balance(&mut banks, &user_x).await + balance(&mut banks, &reserve_x).await,
