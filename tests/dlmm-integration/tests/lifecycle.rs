@@ -169,6 +169,14 @@ async fn full_m4_lifecycle() {
                 bin_step: BIN_STEP,
                 active_bin_id: 0,
                 base_fee_bps: BASE_FEE_BPS,
+                // Dynamic (volatility) fee disabled — base fee only, so the
+                // lifecycle's swap amounts/conservation are unchanged.
+                variable_fee_control: 0,
+                max_volatility_accumulator: 0,
+                filter_period: 0,
+                decay_period: 0,
+                volatility_reduction_factor: 0,
+                max_dynamic_fee_bps: 0,
             },
         )],
         &payer,
