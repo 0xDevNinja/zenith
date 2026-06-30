@@ -25,3 +25,6 @@ bytemuck = { version = "1", features = ["derive", "min_const_generics"] }
 
 [dev-dependencies]
 proptest = "1"
+bytemuck = { version = "1", features = ["derive", "min_const_generics"] }
+# The consolidated fee/volatility vectors (tests/) use the shared math directly.
+zenith-math = { path = "../../crates/zenith-math" }
