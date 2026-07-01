@@ -58,6 +58,27 @@ export class Reader {
     return (hi << 64n) | lo;
   }
 
+  i32(): number {
+    const v = this.view.getInt32(this.offset, true);
+    this.offset += 4;
+    return v;
+  }
+
+  i64(): bigint {
+    const v = this.view.getBigInt64(this.offset, true);
+    this.offset += 8;
+    return v;
+  }
+
+  i128(): bigint {
+    const lo = this.view.getBigUint64(this.offset, true);
+    const hi = this.view.getBigUint64(this.offset + 8, true);
+    this.offset += 16;
+    const unsigned = (hi << 64n) | lo;
+    // Two's-complement: values with the top bit set are negative.
+    return unsigned >= 1n << 127n ? unsigned - (1n << 128n) : unsigned;
+  }
+
   pubkey(): PublicKey {
     // Bounds-check against the logical view length. Unlike the DataView
     // numeric reads (which are bounds-checked), constructing a Uint8Array over
