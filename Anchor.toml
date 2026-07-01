@@ -8,7 +8,7 @@ skip-lint = false
 # generating program keypairs (`anchor keys list`).
 [programs.devnet]
 zenith_amm = "AA8cKcHQj63GEHRaLrrT87W1efRZ44U147JTCXC2Rmkq"
-zenith_dlmm = "Zen1DLMMpLACEHODLERpLACEHODLERpLACEHODLER11"
+zenith_dlmm = "7pxn8tEm44gXjfPH9YXsLywuYpAbgbxq9nPwG1XQczsz"
 
 [registry]
 url = "https://api.apr.dev"
