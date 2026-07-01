@@ -3,12 +3,13 @@ import { ThemeToggle } from "./ThemeToggle";
 import { WalletButton } from "./WalletButton";
 import { cn } from "@/lib/utils";
 
-export type Screen = "home" | "swap" | "pools" | "positions";
+export type Screen = "home" | "swap" | "pools" | "positions" | "dlmm";
 
 const TABS: { id: Screen; label: string }[] = [
   { id: "swap", label: "Swap" },
   { id: "pools", label: "Pools" },
   { id: "positions", label: "Positions" },
+  { id: "dlmm", label: "DLMM" },
 ];
 
 export function Nav({
