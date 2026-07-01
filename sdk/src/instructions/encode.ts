@@ -58,6 +58,18 @@ export class Writer {
     this.parts.push(b);
     return this;
   }
+  i32(v: number): this {
+    const b = Buffer.alloc(4);
+    b.writeInt32LE(v);
+    this.parts.push(b);
+    return this;
+  }
+  i64(v: bigint): this {
+    const b = Buffer.alloc(8);
+    b.writeBigInt64LE(v);
+    this.parts.push(b);
+    return this;
+  }
   bool(v: boolean): this {
     return this.u8(v ? 1 : 0);
   }

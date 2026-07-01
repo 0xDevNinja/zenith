@@ -72,3 +72,21 @@ export {
   type QuoteSwapParams,
   quoteSwap,
 } from "./quote.js";
+
+export {
+  DLMM_INSTRUCTION_DISCRIMINATORS,
+  type InitializeLbPairParams,
+  type AddLiquidityParams,
+  type RemoveLiquidityParams,
+  type SwapParams,
+  buildInitializeLbPair,
+  buildInitializeBinArray,
+  buildInitializeOracle,
+  buildInitializePosition,
+  buildAddLiquidityByStrategy,
+  buildRemoveLiquidity,
+  buildSwap,
+  buildClaimFee,
+  buildClaimProtocolFee,
+  buildClosePosition,
+} from "./instructions.js";
