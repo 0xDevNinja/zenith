@@ -5,6 +5,7 @@ import {
   buildCreatePosition,
   buildRemoveAllLiquidity,
   buildRemoveLiquidity,
+  buildSetPositionCompounding,
   buildTransactionFrom,
   deltaA,
   deltaB,
@@ -181,4 +182,20 @@ export function executeClaimFee(base: Base, ref: PositionRef): Promise<string> {
     mintB: MARKET.tokenB.mint,
   });
   return sendBuilt(base, [claim]);
+}
+
+// Toggle a position's auto-compounding: when on, claim_position_fee folds owed
+// fees back into liquidity instead of paying them out.
+export function executeSetCompounding(
+  base: Base,
+  ref: PositionRef,
+  enabled: boolean,
+): Promise<string> {
+  const set = buildSetPositionCompounding({
+    owner: base.owner,
+    position: ref.position,
+    nftMint: ref.nftMint,
+    enabled,
+  });
+  return sendBuilt(base, [set]);
 }
