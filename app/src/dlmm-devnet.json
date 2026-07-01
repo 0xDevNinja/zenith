@@ -1,0 +1,33 @@
+{
+  "activeBinId": 0,
+  "baseFeeBps": 30,
+  "binArrays": {
+    "-1": "CuCbcS5bKoranDXb1Nmmd7LT8Uc6CazF7SkRMg9P8g7A",
+    "0": "Cjj8GqC2icHPgA5GMgxBKakZ5Xw3GUDQGJ1K1KUJS4bD"
+  },
+  "binStep": 25,
+  "cluster": "devnet",
+  "lbPair": "5idsMpbewctoSp9J2LJVCvN18qciFdSBrveyqsmk1Yxb",
+  "mints": {
+    "5ExoMf1WFKjNikpeC4f5oentzR1mkGMAYaGinCStn43Y": {
+      "decimals": 6,
+      "symbol": "tBIN"
+    },
+    "BEQYTaxC1pAdVvoE1REvYvMpLQo6UXkFDRoAm6PFtgs4": {
+      "decimals": 6,
+      "symbol": "tUSD"
+    }
+  },
+  "oracle": "ABV3MfvpttX2XWfs4JRPjW5RhahDmeEEMnpyDcbW59nK",
+  "pairAuthority": "4keYCVHD9w8KZqJPpzmxKyTUDPmJdgkC8fZ3qfkLbpgo",
+  "positions": [
+    "DDEwnmXZoXDqKBGLUCH9BBUM79BRC9DgY8gqycMPeVz1",
+    "CRUvfBVs93boyHJTtaVEQZMqfBExwcdW26jJaZuiKURU"
+  ],
+  "programId": "7pxn8tEm44gXjfPH9YXsLywuYpAbgbxq9nPwG1XQczsz",
+  "protocolFeeRate": 2000,
+  "reserveX": "7zDg6PQKSEeT5aYfS1B8AXp1EKNDeZPvLcpG7TJ9RYu5",
+  "reserveY": "FyHANvT9cCuMEtkojCkbAmfz4hk2P4R712c1gTgZTszq",
+  "tokenX": "5ExoMf1WFKjNikpeC4f5oentzR1mkGMAYaGinCStn43Y",
+  "tokenY": "BEQYTaxC1pAdVvoE1REvYvMpLQo6UXkFDRoAm6PFtgs4"
+}

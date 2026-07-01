@@ -1,0 +1,22 @@
+[package]
+name = "dlmm-seed"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "Devnet seeder for zenith-dlmm: deploys a live liquidity-book pair (pair, bin arrays, oracle, seeded positions) and writes app/src/dlmm-devnet.json."
+
+# Local tooling only — kept out of the default workspace build so its heavy
+# solana-client RPC deps never compile in CI. Run with:
+#   cargo run -p dlmm-seed --release
+[[bin]]
+name = "dlmm-seed"
+path = "src/main.rs"
+
+[dependencies]
+zenith-dlmm = { path = "../../programs/zenith-dlmm" }
+anchor-lang = "0.31.0"
+solana-client = "2.3"
+solana-sdk = "2.3"
+spl-token = { version = "7", features = ["no-entrypoint"] }
+spl-associated-token-account = { version = "6", features = ["no-entrypoint"] }
+serde_json = "1"

@@ -6,6 +6,16 @@ members = [
     "crates/zenith-math",
     "tests/amm-integration",
     "tests/dlmm-integration",
+    "scripts/dlmm-seed",
+]
+# dlmm-seed pulls the heavy solana-client RPC stack; keep it out of the default
+# build/test path (run it explicitly with `cargo run -p dlmm-seed`).
+default-members = [
+    "programs/zenith-amm",
+    "programs/zenith-dlmm",
+    "crates/zenith-math",
+    "tests/amm-integration",
+    "tests/dlmm-integration",
 ]
 
 [profile.release]
