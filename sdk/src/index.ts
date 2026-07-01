@@ -6,6 +6,10 @@
 
 export const VERSION = "0.1.0";
 
+// zenith-dlmm (liquidity book) — PDA + account decoders under the `dlmm`
+// namespace to avoid clashing with the AMM's flat exports.
+export * as dlmm from "./dlmm/index.js";
+
 export { ZENITH_AMM_PROGRAM_ID, SEEDS } from "./constants.js";
 export {
   type Pda,
