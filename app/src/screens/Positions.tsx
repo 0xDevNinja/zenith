@@ -17,6 +17,7 @@ import {
   executeOpenPosition,
   executeRemoveAll,
   executeRemoveLiquidity,
+  executeSetCompounding,
   inRange,
   liquidityForTokenA,
   owedFees,
@@ -119,10 +120,26 @@ export function Positions() {
   const onClaim = async (p: OwnedPosition) => {
     if (!publicKey) return;
     setBusy(true);
+    const compounding = p.position.compounding !== 0;
     const sig = await notifyTx(() => executeClaimFee(base(), { position: p.address, nftMint: p.nftMint }), {
-      pending: "Claiming fees…",
-      success: "Fees claimed",
+      pending: compounding ? "Compounding fees…" : "Claiming fees…",
+      success: compounding ? "Fees compounded into liquidity" : "Fees claimed",
     });
+    if (sig) refreshAll();
+    setBusy(false);
+  };
+
+  const onToggleCompound = async (p: OwnedPosition) => {
+    if (!publicKey) return;
+    const next = p.position.compounding === 0;
+    setBusy(true);
+    const sig = await notifyTx(
+      () => executeSetCompounding(base(), { position: p.address, nftMint: p.nftMint }, next),
+      {
+        pending: next ? "Enabling auto-compound…" : "Disabling auto-compound…",
+        success: next ? "Auto-compound on" : "Auto-compound off",
+      },
+    );
     if (sig) refreshAll();
     setBusy(false);
   };
@@ -270,6 +287,7 @@ export function Positions() {
                 pending={busy}
                 onRemove={onRemove}
                 onClaim={onClaim}
+                onToggleCompound={onToggleCompound}
               />
             ))
           )}
@@ -286,6 +304,7 @@ function PositionCard({
   pending,
   onRemove,
   onClaim,
+  onToggleCompound,
 }: {
   index: number;
   owned: OwnedPosition;
@@ -293,12 +312,14 @@ function PositionCard({
   pending: boolean;
   onRemove: (p: OwnedPosition, fraction: number) => void;
   onClaim: (p: OwnedPosition) => void;
+  onToggleCompound: (p: OwnedPosition) => void;
 }) {
   const comp = pool ? composition(pool, owned.position.liquidity) : null;
   const owed = pool ? owedFees(pool, owned.position) : { a: 0n, b: 0n };
   const hasFees = owed.a > 0n || owed.b > 0n;
   const empty = owned.position.liquidity === 0n;
   const ranged = pool ? inRange(pool) : true;
+  const compounding = owned.position.compounding !== 0;
 
   return (
     <Card className="p-5">
@@ -320,7 +341,7 @@ function PositionCard({
       </div>
       <div className="mt-4 flex gap-2">
         <Button variant="gold" size="sm" className="flex-1" disabled={pending || !hasFees} onClick={() => onClaim(owned)}>
-          Claim fees
+          {compounding ? "Compound fees" : "Claim fees"}
         </Button>
         {!empty && (
           <>
@@ -332,6 +353,32 @@ function PositionCard({
             </Button>
           </>
         )}
+      </div>
+      <div className="mt-3 flex items-center justify-between border-t border-line/40 pt-3">
+        <span className="text-xs text-dusk">
+          Auto-compound fees
+          <span className="ml-1.5 text-dusk/70">
+            {compounding ? "· claims fold into liquidity" : "· claims pay out"}
+          </span>
+        </span>
+        <button
+          role="switch"
+          aria-checked={compounding}
+          aria-label="Toggle auto-compound"
+          disabled={pending}
+          onClick={() => onToggleCompound(owned)}
+          className={cn(
+            "relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-50",
+            compounding ? "bg-meridian" : "border border-line bg-panel-2",
+          )}
+        >
+          <span
+            className={cn(
+              "absolute top-0.5 h-4 w-4 rounded-full bg-night transition-transform",
+              compounding ? "translate-x-4" : "translate-x-0.5",
+            )}
+          />
+        </button>
       </div>
     </Card>
   );
