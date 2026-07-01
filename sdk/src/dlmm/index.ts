@@ -48,3 +48,27 @@ export {
   fetchDlmmPosition,
   fetchOracle,
 } from "./fetch.js";
+
+export {
+  Direction,
+  SwapMode,
+  type BinFill,
+  type VariableFeeState,
+  binPrice,
+  fillExactIn,
+  fillExactOut,
+  binMoveBps,
+  decayedVolatilityReference,
+  accumulateVolatility,
+  variableFeeBps,
+  totalFeeBps,
+  splitProtocolFee,
+  computeVariableFee,
+} from "./math.js";
+
+export {
+  DlmmQuoteError,
+  type DlmmSwapQuote,
+  type QuoteSwapParams,
+  quoteSwap,
+} from "./quote.js";
