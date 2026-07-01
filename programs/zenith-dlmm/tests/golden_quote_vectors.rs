@@ -62,7 +62,17 @@ fn emit_quote_vectors() {
     for (i, &active) in [-30i32, -5, 0, 5, 30].iter().enumerate() {
         for &elapsed in &[0u64, 5, 10, 50, 100, 200] {
             let s = compute_variable_fee(
-                active, 0, (i as u128) * 100, 40, elapsed, 10, 100, 5_000, 100_000, 25, 1_000_000,
+                active,
+                0,
+                (i as u128) * 100,
+                40,
+                elapsed,
+                10,
+                100,
+                5_000,
+                100_000,
+                25,
+                1_000_000,
                 1_000,
             );
             var_fees.push(format!(

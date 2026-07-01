@@ -52,8 +52,8 @@ fn ix(accounts: impl ToAccountMetas, data: impl InstructionData) -> Instruction 
 
 fn load_cli_keypair() -> Keypair {
     let path = dirs_home().join(".config/solana/id.json");
-    let bytes: Vec<u8> = serde_json::from_slice(&fs::read(&path).expect("read id.json"))
-        .expect("parse id.json");
+    let bytes: Vec<u8> =
+        serde_json::from_slice(&fs::read(&path).expect("read id.json")).expect("parse id.json");
     Keypair::from_bytes(&bytes).expect("keypair from bytes")
 }
 
@@ -127,10 +127,15 @@ fn main() {
     let supply = 1_000_000_000_000u64; // 1e12 (1,000,000 tokens at 6 dp)
     for (mint, ata) in [(&mint_x, &user_x), (&mint_y, &user_y)] {
         send(
-            &[
-                spl_token::instruction::mint_to(&spl_token::ID, mint, ata, &payer.pubkey(), &[], supply)
-                    .unwrap(),
-            ],
+            &[spl_token::instruction::mint_to(
+                &spl_token::ID,
+                mint,
+                ata,
+                &payer.pubkey(),
+                &[],
+                supply,
+            )
+            .unwrap()],
             &[&payer],
             "mint supply",
         );
@@ -309,7 +314,11 @@ fn main() {
         },
     });
     let out = dirs_home().join("zenith/app/src/dlmm-devnet.json");
-    fs::write(&out, serde_json::to_string_pretty(&manifest).unwrap() + "\n").expect("write manifest");
+    fs::write(
+        &out,
+        serde_json::to_string_pretty(&manifest).unwrap() + "\n",
+    )
+    .expect("write manifest");
     println!("\nmanifest → {}", out.display());
     println!("lb_pair  {lb_pair}");
     println!("oracle   {oracle}");
