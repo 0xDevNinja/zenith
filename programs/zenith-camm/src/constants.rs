@@ -14,6 +14,9 @@ pub const RESERVE_SEED: &[u8] = b"cp_reserve";
 pub const LP_MINT_SEED: &[u8] = b"cp_lp_mint";
 /// The token account that permanently holds the locked minimum liquidity.
 pub const LOCKED_LP_SEED: &[u8] = b"cp_locked_lp";
+/// A per-mint yield-source vault: the pre-funded pot the mock lending vault pays
+/// yield out of, keyed by the pool + the mint it pays in.
+pub const YIELD_SOURCE_SEED: &[u8] = b"cp_yield_source";
 
 /// Largest fee a pool may set (basis points), exclusive. Mirrors the other
 /// engines' cap so a pool can never take the entire trade as fee.
@@ -23,3 +26,12 @@ pub const MAX_FEE_BPS: u16 = 10_000;
 /// (geometric mean of the deposited token amounts), so this is purely cosmetic
 /// for wallets; 9 matches the Solana-native convention.
 pub const LP_MINT_DECIMALS: u8 = 9;
+
+/// Fixed-point scale for the yield rate: `Pool::yield_rate` is the yield paid
+/// per deployed token unit per slot, multiplied by this. Accrued yield is
+/// `deployed * yield_rate * elapsed_slots / YIELD_SCALE`.
+pub const YIELD_SCALE: u128 = 1_000_000_000;
+
+/// Largest buffer fraction (bps) a pool may keep out of the yield vault. Capped
+/// below 100% so some principal can always be deployed.
+pub const MAX_BUFFER_BPS: u16 = 10_000;
