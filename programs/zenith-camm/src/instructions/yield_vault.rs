@@ -188,10 +188,16 @@ fn accrue(ctx: &Context<YieldAccrue>, pool: &mut Pool, now: u64) -> Result<(u64,
     );
 
     let elapsed = now.saturating_sub(pool.last_accrual_slot);
-    let want_a = accrued_yield(pool.deployed_a, pool.yield_rate, elapsed)
-        .map_err(|_| CammError::MathOverflow)?;
-    let want_b = accrued_yield(pool.deployed_b, pool.yield_rate, elapsed)
-        .map_err(|_| CammError::MathOverflow)?;
+    // Clamp the accrual base to the present reserve: a swap can shrink the
+    // reserve below the stale `deployed` snapshot, and yield should never accrue
+    // on more than the capital actually idle now. (rebalance_to_vault re-clamps
+    // `deployed` itself.)
+    let base_a = pool.deployed_a.min(pool.reserve_a);
+    let base_b = pool.deployed_b.min(pool.reserve_b);
+    let want_a =
+        accrued_yield(base_a, pool.yield_rate, elapsed).map_err(|_| CammError::MathOverflow)?;
+    let want_b =
+        accrued_yield(base_b, pool.yield_rate, elapsed).map_err(|_| CammError::MathOverflow)?;
     // Never pay more than the source holds.
     let paid_a = want_a.min(ctx.accounts.yield_source_a.amount);
     let paid_b = want_b.min(ctx.accounts.yield_source_b.amount);

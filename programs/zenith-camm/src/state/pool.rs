@@ -178,7 +178,9 @@ mod tests {
     #[test]
     fn layout_is_pod_and_16_byte_multiple() {
         // Pod requires no internal padding; the size must be a multiple of the
-        // 16-byte (u128) alignment.
+        // 16-byte (u128) alignment. Pinned to 400 so a field change that shifts
+        // the layout (and would misread existing pools) fails the build.
+        assert_eq!(core::mem::size_of::<Pool>(), 400);
         assert_eq!(core::mem::size_of::<Pool>() % 16, 0);
         assert_eq!(core::mem::align_of::<Pool>(), 16);
         // A zeroed pool is Uninitialized and inactive.
