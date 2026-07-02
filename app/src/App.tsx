@@ -5,6 +5,7 @@ import { Swap } from "./screens/Swap";
 import { Pools } from "./screens/Pools";
 import { Positions } from "./screens/Positions";
 import { Dlmm } from "./screens/Dlmm";
+import { Camm } from "./screens/Camm";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("home");
@@ -25,6 +26,7 @@ export default function App() {
         {screen === "pools" && <Pools onNavigate={setScreen} />}
         {screen === "positions" && <Positions />}
         {screen === "dlmm" && <Dlmm />}
+        {screen === "camm" && <Camm />}
       </main>
       <footer className="border-t border-line/40 py-6 text-center text-xs text-dusk">
         Zenith · concentrated-liquidity AMM · Solana devnet
