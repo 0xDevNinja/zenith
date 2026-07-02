@@ -9,6 +9,7 @@ skip-lint = false
 [programs.devnet]
 zenith_amm = "AA8cKcHQj63GEHRaLrrT87W1efRZ44U147JTCXC2Rmkq"
 zenith_dlmm = "7pxn8tEm44gXjfPH9YXsLywuYpAbgbxq9nPwG1XQczsz"
+zenith_camm = "CjjcK3rnskHswBpTgZquLGgS7P2QyzeaNwwe98FUUdy7"
 
 [registry]
 url = "https://api.apr.dev"
