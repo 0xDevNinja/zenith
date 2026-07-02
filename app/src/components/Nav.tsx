@@ -3,7 +3,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import { WalletButton } from "./WalletButton";
 import { cn } from "@/lib/utils";
 
-export type Screen = "home" | "swap" | "pools" | "positions" | "dlmm" | "camm";
+export type Screen = "home" | "swap" | "pools" | "positions" | "dlmm" | "camm" | "create";
 
 const TABS: { id: Screen; label: string }[] = [
   { id: "swap", label: "Swap" },
@@ -11,6 +11,7 @@ const TABS: { id: Screen; label: string }[] = [
   { id: "positions", label: "Positions" },
   { id: "dlmm", label: "DLMM" },
   { id: "camm", label: "Yield" },
+  { id: "create", label: "Create" },
 ];
 
 export function Nav({
