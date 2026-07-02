@@ -123,6 +123,9 @@ pub struct Pool {
     /// constant fee / decay floor). NOT the live swap fee: `swap` derives the
     /// current fee from the config's scheduler + `activation_point` each trade.
     pub base_fee_bps: u16,
+    /// Tick spacing: only ticks that are multiples of this are usable as
+    /// position bounds. Copied from the config at pool creation.
+    pub tick_spacing: u16,
     /// Lifecycle status (see [`PoolStatus`]).
     pub status: u8,
     /// Bump for the pool authority PDA.
@@ -139,7 +142,7 @@ pub struct Pool {
     /// Token program flavor for mint B: 0 = SPL Token, 1 = Token-2022.
     pub token_b_flags: u8,
     /// Trailing padding to keep the struct 16-byte sized (no Pod padding).
-    pub padding: [u8; 7],
+    pub padding: [u8; 5],
 }
 
 impl Pool {

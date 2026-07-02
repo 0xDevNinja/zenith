@@ -46,6 +46,7 @@ fn emit_pool() {
     pool.token_b_vault_bump = 26;
     pool.token_a_flags = 1;
     pool.token_b_flags = 0;
+    pool.tick_spacing = 64;
 
     let mut data = Pool::DISCRIMINATOR.to_vec();
     data.extend_from_slice(bytemuck::bytes_of(&pool));
@@ -66,7 +67,9 @@ fn emit_position() {
         fee_pending_b: 39,
         bump: 40,
         compounding: 1,
-        reserved: [0u8; 63],
+        tick_lower: -60,
+        tick_upper: 61,
+        reserved: [0u8; 55],
     };
     let mut data = Vec::new();
     position.try_serialize(&mut data).unwrap();
@@ -95,9 +98,10 @@ fn emit_config() {
         volatility_reduction_factor: 57,
         max_dynamic_fee_bps: 58,
         partner_fee_bps: 59,
+        tick_spacing: 64,
         fee_scheduler_mode: 2,
         bump: 60,
-        reserved: [0u8; 16],
+        reserved: [0u8; 14],
     };
     let mut data = Vec::new();
     config.try_serialize(&mut data).unwrap();

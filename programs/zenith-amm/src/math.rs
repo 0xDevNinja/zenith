@@ -676,7 +676,9 @@ mod tests {
             fee_pending_b: 0,
             bump: 0,
             compounding: 0,
-            reserved: [0u8; 63],
+            tick_lower: 0,
+            tick_upper: 0,
+            reserved: [0u8; 55],
         };
         // Global grew by 0.5 (Q64.64) for A, 2.0 for B since the checkpoint.
         let half = ONE / 2;
@@ -713,7 +715,9 @@ mod tests {
             fee_pending_b: 0,
             bump: 0,
             compounding: 0,
-            reserved: [0u8; 63],
+            tick_lower: 0,
+            tick_upper: 0,
+            reserved: [0u8; 55],
         };
         settle_position_fees(&mut pos, global_a, global_b).unwrap();
         assert_eq!(pos.fee_pending_a, 0);
@@ -738,7 +742,9 @@ mod tests {
             fee_pending_b: 0,
             bump: 0,
             compounding: 0,
-            reserved: [0u8; 63],
+            tick_lower: 0,
+            tick_upper: 0,
+            reserved: [0u8; 55],
         };
         // Global wrapped past u128::MAX to 5: delta = 5 - (MAX-2) = 8 (wrapping).
         settle_position_fees(&mut pos, 5, 0).unwrap();

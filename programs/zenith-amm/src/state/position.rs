@@ -32,8 +32,12 @@ pub struct Position {
     /// Compounding mode: when nonzero, `claim_position_fee` folds owed fees back
     /// into the position's liquidity instead of paying them out.
     pub compounding: u8,
+    /// Lower tick bound of this position's price range (inclusive).
+    pub tick_lower: i32,
+    /// Upper tick bound of this position's price range (exclusive).
+    pub tick_upper: i32,
     /// Reserved for forward-compatible fields without a realloc.
-    pub reserved: [u8; 63],
+    pub reserved: [u8; 55],
 }
 
 impl Position {

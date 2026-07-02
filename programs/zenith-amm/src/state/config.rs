@@ -53,10 +53,13 @@ pub struct Config {
     pub max_dynamic_fee_bps: u16,
     /// Partner's share of the protocol fee, bps (0 if no partner).
     pub partner_fee_bps: u16,
+    /// Default tick spacing for pools created from this config: position bounds
+    /// must be multiples of it. Copied onto the pool at creation.
+    pub tick_spacing: u16,
     /// Fee scheduler mode: 0 = Constant, 1 = Linear, 2 = Exponential.
     pub fee_scheduler_mode: u8,
     /// PDA bump.
     pub bump: u8,
     /// Reserved for forward-compatible fields without a realloc.
-    pub reserved: [u8; 16],
+    pub reserved: [u8; 14],
 }

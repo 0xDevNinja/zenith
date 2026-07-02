@@ -16,3 +16,10 @@ pub const VAULT_SEED: &[u8] = b"vault";
 pub const POSITION_SEED: &[u8] = b"position";
 /// Custody (token account) holding a position's NFT, keyed by the NFT mint.
 pub const POSITION_NFT_SEED: &[u8] = b"position_nft";
+/// A fixed-size array of ticks, keyed by the pool + the array's start tick.
+pub const TICK_ARRAY_SEED: &[u8] = b"tick_array";
+
+/// Number of ticks stored in one [`crate::state::TickArray`] account. Chosen so
+/// one array (≈ 88·64 B payload) stays well under a 10 KB account and cheap to
+/// rent; a swap crosses at most a few arrays per transaction.
+pub const TICKS_PER_ARRAY: usize = 88;

@@ -26,4 +26,14 @@ pub enum ZenithError {
     ZeroAmount,
     #[msg("Position still holds liquidity or unclaimed fees")]
     PositionNotEmpty,
+    #[msg("Invalid tick range (lower must be < upper and both in-domain)")]
+    InvalidTickRange,
+    #[msg("Tick is not a multiple of the pool's tick spacing")]
+    TickNotSpaced,
+    #[msg("A required tick array was not provided")]
+    TickArrayNotProvided,
+    #[msg("Tick array does not match the pool or expected start index")]
+    TickArrayMismatch,
+    #[msg("Tick is not initialized")]
+    TickUninitialized,
 }
