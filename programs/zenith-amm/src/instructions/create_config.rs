@@ -79,6 +79,7 @@ pub fn create_config(
     protocol_fee_bps: u16,
     partner: Pubkey,
     partner_fee_bps: u16,
+    tick_spacing: u16,
     fee_scheduler: FeeSchedulerParams,
     dynamic_fee: DynamicFeeParams,
 ) -> Result<()> {
@@ -86,6 +87,9 @@ pub fn create_config(
         sqrt_min_price > 0 && sqrt_min_price < sqrt_max_price,
         ZenithError::InvalidPriceBand
     );
+    // Tick spacing must be positive: position bounds are required to be exact
+    // multiples of it, and a zero spacing has no valid multiples.
+    require!(tick_spacing > 0, ZenithError::InvalidTickRange);
     // A zero fee authority would strand protocol fees forever (nobody can sign
     // as the default pubkey to claim them).
     require!(
@@ -130,9 +134,10 @@ pub fn create_config(
     config.volatility_reduction_factor = dynamic_fee.volatility_reduction_factor;
     config.max_dynamic_fee_bps = dynamic_fee.max_dynamic_fee_bps;
     config.partner_fee_bps = partner_fee_bps;
+    config.tick_spacing = tick_spacing;
     config.fee_scheduler_mode = fee_scheduler.mode;
     config.bump = ctx.bumps.config;
-    config.reserved = [0u8; 16];
+    config.reserved = [0u8; 14];
 
     Ok(())
 }

@@ -230,6 +230,7 @@ pub fn initialize_pool(
         pool.partner_fee_b = 0;
         pool.reserved_u64 = [0u64; 5];
         pool.base_fee_bps = config.base_fee_bps;
+        pool.tick_spacing = config.tick_spacing;
         pool.status = PoolStatus::Active as u8;
         pool.pool_authority_bump = ctx.bumps.pool_authority;
         pool.pool_bump = ctx.bumps.pool;
@@ -237,7 +238,7 @@ pub fn initialize_pool(
         pool.token_b_vault_bump = ctx.bumps.token_b_vault;
         pool.token_a_flags = TokenFlavor::SplToken as u8;
         pool.token_b_flags = TokenFlavor::SplToken as u8;
-        pool.padding = [0u8; 7];
+        pool.padding = [0u8; 5];
     }
 
     // Open the first position (all unlocked liquidity, fee checkpoints at zero).
@@ -255,7 +256,11 @@ pub fn initialize_pool(
     position.fee_pending_b = 0;
     position.bump = ctx.bumps.position;
     position.compounding = 0;
-    position.reserved = [0u8; 63];
+    // Full-range bounds preserve the current single-band behavior until #125
+    // wires per-position ranges through create_position / modify_liquidity.
+    position.tick_lower = zenith_math::MIN_TICK;
+    position.tick_upper = zenith_math::MAX_TICK;
+    position.reserved = [0u8; 55];
 
     emit!(PoolInitialized {
         pool: pool_key,

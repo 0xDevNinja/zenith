@@ -162,6 +162,8 @@ async fn full_m1_lifecycle() {
                 // No partner.
                 partner: Pubkey::default(),
                 partner_fee_bps: 0,
+                // Tick spacing (positions are still opened full-range in M9 #124).
+                tick_spacing: 64,
                 // Constant-mode fee scheduler (flat 0.3%); decay params unused.
                 fee_scheduler_mode: 0,
                 cliff_fee_bps: 0,

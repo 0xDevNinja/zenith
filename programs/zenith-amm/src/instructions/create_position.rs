@@ -140,7 +140,11 @@ pub fn create_position(ctx: Context<CreatePosition>) -> Result<()> {
     position.fee_pending_b = 0;
     position.bump = ctx.bumps.position;
     position.compounding = 0;
-    position.reserved = [0u8; 63];
+    // Full-range bounds preserve the current single-band behavior until #125
+    // wires per-position ranges through create_position / modify_liquidity.
+    position.tick_lower = zenith_math::MIN_TICK;
+    position.tick_upper = zenith_math::MAX_TICK;
+    position.reserved = [0u8; 55];
 
     emit!(PositionCreated {
         pool: pool_key,
