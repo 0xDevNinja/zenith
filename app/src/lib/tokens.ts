@@ -33,3 +33,29 @@ export function formatAmount(raw: bigint, decimals: number, maxFrac = 6): string
   const wholeStr = whole.toLocaleString("en-US");
   return `${neg ? "-" : ""}${wholeStr}${fracStr ? "." + fracStr : ""}`;
 }
+
+// Compact display for very large unitless quantities (e.g. concentrated-liquidity
+// L, which lives at Q64 scale and can be 18+ digits). 1_234_567n -> "1.23M".
+// Keeps two significant fractional digits; falls back to grouped digits below 1K.
+export function formatCompact(raw: bigint): string {
+  const neg = raw < 0n;
+  const abs = neg ? -raw : raw;
+  const sign = neg ? "-" : "";
+  const tiers: { v: bigint; s: string }[] = [
+    { v: 10n ** 18n, s: "E" },
+    { v: 10n ** 15n, s: "Q" },
+    { v: 10n ** 12n, s: "T" },
+    { v: 10n ** 9n, s: "B" },
+    { v: 10n ** 6n, s: "M" },
+    { v: 10n ** 3n, s: "K" },
+  ];
+  for (const t of tiers) {
+    if (abs >= t.v) {
+      const scaled = (abs * 100n) / t.v; // two extra digits of precision
+      const whole = scaled / 100n;
+      const frac = (scaled % 100n).toString().padStart(2, "0").replace(/0+$/, "");
+      return `${sign}${whole.toLocaleString("en-US")}${frac ? "." + frac : ""}${t.s}`;
+    }
+  }
+  return `${sign}${abs.toString()}`;
+}
