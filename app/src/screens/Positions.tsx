@@ -25,7 +25,7 @@ import {
   slipUp,
 } from "@/lib/liquidity";
 import { useToast } from "@/lib/toast";
-import { formatAmount, formatPlain, parseAmount } from "@/lib/tokens";
+import { formatAmount, formatCompact, formatPlain, parseAmount } from "@/lib/tokens";
 import { cn } from "@/lib/utils";
 
 const SLIPPAGE_BPS = 50;
@@ -144,7 +144,17 @@ export function Positions() {
     setBusy(false);
   };
 
-  const totalLiquidity = positions.reduce((s, p) => s + p.position.liquidity, 0n);
+  // Real token value locked across all positions (from each L's composition),
+  // not the raw L coefficient — that's a Q64 math unit, meaningless to a human.
+  const totalHeld = pool
+    ? positions.reduce(
+        (acc, p) => {
+          const c = composition(pool, p.position.liquidity, Rounding.Down);
+          return { a: acc.a + c.amountA, b: acc.b + c.amountB };
+        },
+        { a: 0n, b: 0n },
+      )
+    : { a: 0n, b: 0n };
   const totalOwed = pool
     ? positions.reduce(
         (acc, p) => {
@@ -259,7 +269,10 @@ export function Positions() {
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             <Stat label="Open positions" value={String(positions.length)} />
-            <Stat label="Total liquidity" value={totalLiquidity > 0n ? formatAmount(totalLiquidity, 0, 0) : "0"} />
+            <Stat
+              label="Value locked"
+              value={`${formatAmount(totalHeld.a, A.decimals, 2)} / ${formatAmount(totalHeld.b, B.decimals, 2)}`}
+            />
             <Stat
               label="Unclaimed fees"
               value={`${formatAmount(totalOwed.a, A.decimals, 2)} / ${formatAmount(totalOwed.b, B.decimals, 2)}`}
@@ -331,7 +344,7 @@ function PositionCard({
             {ranged ? "In range" : "Out of range"}
           </span>
         </span>
-        <span className="font-mono text-[11px] text-dusk">L {formatAmount(owned.position.liquidity, 0, 0)}</span>
+        <span className="shrink-0 font-mono text-[11px] text-dusk">L {formatCompact(owned.position.liquidity)}</span>
       </div>
       <div className="grid grid-cols-2 gap-3 border-t border-line/40 pt-3">
         <Holding label={A.symbol} raw={comp?.amountA ?? 0n} decimals={A.decimals} />
@@ -454,9 +467,11 @@ function Holding({ label, raw, decimals, accent }: { label: string; raw: bigint;
 
 function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <Card className="px-5 py-4">
+    <Card className="min-w-0 px-5 py-4">
       <div className="text-xs text-dusk">{label}</div>
-      <div className={cn("mt-1 font-mono text-2xl tnum", accent ? "text-star" : "text-starlight")}>{value}</div>
+      <div className={cn("mt-1 truncate font-mono text-2xl tnum", accent ? "text-star" : "text-starlight")} title={value}>
+        {value}
+      </div>
     </Card>
   );
 }
