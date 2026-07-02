@@ -10,6 +10,10 @@ export const VERSION = "0.1.0";
 // namespace to avoid clashing with the AMM's flat exports.
 export * as dlmm from "./dlmm/index.js";
 
+// zenith-camm (full-range constant-product + yield) — under the `camm`
+// namespace, same reason.
+export * as camm from "./camm/index.js";
+
 export { ZENITH_AMM_PROGRAM_ID, SEEDS } from "./constants.js";
 export {
   type Pda,
