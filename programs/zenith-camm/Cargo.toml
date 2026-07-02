@@ -1,0 +1,28 @@
+[package]
+name = "zenith-camm"
+version = "0.1.0"
+edition = "2021"
+description = "Zenith full-range constant-product AMM with idle-reserve yield."
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "zenith_camm"
+
+[features]
+default = []
+cpi = ["no-entrypoint"]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
+
+[dependencies]
+anchor-lang = "0.31.0"
+anchor-spl = "0.31.0"
+zenith-math = { path = "../../crates/zenith-math" }
+bytemuck = { version = "1", features = ["derive", "min_const_generics"] }
+
+[dev-dependencies]
+proptest = "1"
+zenith-math = { path = "../../crates/zenith-math" }
