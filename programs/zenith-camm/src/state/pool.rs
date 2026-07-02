@@ -106,9 +106,22 @@ pub struct Pool {
     pub protocol_fee_b: u64,
     /// Slot at which the pool was created.
     pub activation_point: u64,
-    /// Reserved 8-byte slots for the yield engine (deposited principal per side,
-    /// last-accrual slot, buffer config) and forward-compatible fields.
-    pub reserved_u64: [u64; 6],
+    /// Principal of token A marked as deployed to the yield vault. The tokens
+    /// stay physically in the reserve vault (so swaps are always solvent); this
+    /// is the base the per-slot yield accrues on. Set by `rebalance_to_vault`.
+    pub deployed_a: u64,
+    /// Principal of token B marked as deployed to the yield vault.
+    pub deployed_b: u64,
+    /// Slot of the last yield accrual (harvest or rebalance).
+    pub last_accrual_slot: u64,
+    /// Mock lending rate: yield per deployed unit per slot, scaled by
+    /// [`crate::constants::YIELD_SCALE`]. Zero means the yield engine is off.
+    pub yield_rate: u64,
+    /// Fraction (bps) of each reserve kept as a swap-solvency buffer, never
+    /// counted as deployed principal.
+    pub buffer_bps: u64,
+    /// Reserved 8-byte slot for forward-compatible fields.
+    pub reserved_u64: [u64; 1],
 
     // --- 2-byte aligned (u16) ---
     /// Base swap fee in basis points, taken from the input amount.
@@ -150,6 +163,11 @@ impl Pool {
     /// `true` if the pool is open for swaps.
     pub fn is_active(&self) -> bool {
         self.status() == PoolStatus::Active
+    }
+
+    /// `true` if the idle-reserve yield engine has been configured.
+    pub fn yield_enabled(&self) -> bool {
+        self.yield_rate > 0
     }
 }
 

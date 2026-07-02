@@ -19,6 +19,7 @@ pub mod fee;
 pub mod instructions;
 pub mod pda;
 pub mod state;
+pub mod yield_math;
 
 pub use constants::*;
 pub use errors::CammError;
@@ -77,5 +78,26 @@ pub mod zenith_camm {
         other_amount_threshold: u64,
     ) -> Result<()> {
         instructions::swap(ctx, direction, mode, amount, other_amount_threshold)
+    }
+
+    /// Configure the idle-reserve yield engine and create its pre-funded source
+    /// vaults (creator only).
+    pub fn initialize_yield(
+        ctx: Context<InitializeYield>,
+        yield_rate: u64,
+        buffer_bps: u16,
+    ) -> Result<()> {
+        instructions::initialize_yield(ctx, yield_rate, buffer_bps)
+    }
+
+    /// Harvest accrued yield into the reserves, then re-mark the idle reserve
+    /// above the buffer as deployed principal.
+    pub fn rebalance_to_vault(ctx: Context<YieldAccrue>) -> Result<()> {
+        instructions::rebalance_to_vault(ctx)
+    }
+
+    /// Pay accrued yield into the reserves (raises the LP share price).
+    pub fn harvest_yield(ctx: Context<YieldAccrue>) -> Result<()> {
+        instructions::harvest_yield(ctx)
     }
 }

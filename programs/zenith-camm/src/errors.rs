@@ -26,4 +26,8 @@ pub enum CammError {
     InsufficientReserve,
     #[msg("First deposit is below the minimum liquidity floor")]
     BelowMinimumLiquidity,
+    #[msg("Invalid yield configuration")]
+    InvalidYieldConfig,
+    #[msg("Yield engine is not configured for this pool")]
+    YieldNotConfigured,
 }

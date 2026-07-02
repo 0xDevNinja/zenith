@@ -131,7 +131,13 @@ pub fn initialize_pool(
         pool.protocol_fee_a = 0;
         pool.protocol_fee_b = 0;
         pool.activation_point = now;
-        pool.reserved_u64 = [0u64; 6];
+        // Yield engine starts off (rate 0); configured later via initialize_yield.
+        pool.deployed_a = 0;
+        pool.deployed_b = 0;
+        pool.last_accrual_slot = 0;
+        pool.yield_rate = 0;
+        pool.buffer_bps = 0;
+        pool.reserved_u64 = [0u64; 1];
         pool.base_fee_bps = base_fee_bps;
         pool.protocol_fee_rate = protocol_fee_rate;
         pool.status = PoolStatus::Active as u8;

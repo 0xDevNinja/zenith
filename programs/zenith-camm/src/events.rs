@@ -40,3 +40,26 @@ pub struct Swap {
     pub fee: u64,
     pub protocol_fee: u64,
 }
+
+#[event]
+pub struct YieldInitialized {
+    pub pool: Pubkey,
+    pub yield_rate: u64,
+    pub buffer_bps: u64,
+}
+
+#[event]
+pub struct Rebalanced {
+    pub pool: Pubkey,
+    pub deployed_a: u64,
+    pub deployed_b: u64,
+    pub harvested_a: u64,
+    pub harvested_b: u64,
+}
+
+#[event]
+pub struct YieldHarvested {
+    pub pool: Pubkey,
+    pub harvested_a: u64,
+    pub harvested_b: u64,
+}
