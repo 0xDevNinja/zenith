@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "programs/zenith-amm",
     "programs/zenith-dlmm",
+    "programs/zenith-camm",
     "crates/zenith-math",
     "tests/amm-integration",
     "tests/dlmm-integration",
@@ -13,6 +14,7 @@ members = [
 default-members = [
     "programs/zenith-amm",
     "programs/zenith-dlmm",
+    "programs/zenith-camm",
     "crates/zenith-math",
     "tests/amm-integration",
     "tests/dlmm-integration",
