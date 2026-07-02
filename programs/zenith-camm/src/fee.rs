@@ -8,7 +8,7 @@
 //! `k`). All of these are pure integer functions so they can be unit-tested and
 //! ported bit-exact to the SDK.
 
-use zenith_math::{mul_div, MathResult, Rounding};
+use zenith_math::{mul_div, MathError, MathResult, Rounding};
 
 use crate::constants::MAX_FEE_BPS;
 
@@ -32,7 +32,11 @@ pub fn fee_on_input(amount_in: u64, fee_bps: u16) -> MathResult<u64> {
 pub fn gross_input_for_net(net_in: u64, fee_bps: u16) -> MathResult<u64> {
     let denom = BPS - fee_bps as u128; // fee_bps < MAX_FEE_BPS, so denom >= 1
     let gross = mul_div(net_in as u128, BPS, denom, Rounding::Up)?;
-    Ok(gross as u64)
+    // Unlike fee_on_input / split (whose results are bounded by their inputs),
+    // the gross-up can exceed u64 as fee_bps approaches 100%; narrow with a
+    // checked cast so an overflow errors instead of silently truncating (a bare
+    // `as u64` is not caught by overflow-checks and could underpay the curve).
+    gross.try_into().map_err(|_| MathError::Overflow)
 }
 
 /// Split a fee into `(protocol, lp)`: the protocol takes
