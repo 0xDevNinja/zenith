@@ -26,6 +26,7 @@ mod bin_price;
 mod constant_product;
 mod q64;
 mod sqrt_price;
+mod tick;
 mod u256;
 
 pub use bin_price::{bin_price, pow, MAX_BIN_STEP_BPS, MAX_PRICE_BITS, MIN_PRICE_BITS};
@@ -38,6 +39,10 @@ pub use sqrt_price::{
     delta_a, delta_b, liquidity_from_amount_a, liquidity_from_amount_b,
     next_sqrt_price_from_amount_x, next_sqrt_price_from_amount_y, price_from_sqrt_price,
     sqrt_price_from_price, sqrt_u128, sqrt_u256,
+};
+pub use tick::{
+    cross_tick_liquidity, fee_growth_inside, sqrt_price_at_tick, tick_at_sqrt_price,
+    valid_tick_range, MAX_TICK, MIN_TICK,
 };
 pub use u256::{mul_div, mul_shr, shl_div, MathError, MathResult};
 
