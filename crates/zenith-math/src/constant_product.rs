@@ -31,10 +31,17 @@ pub const MINIMUM_LIQUIDITY: u128 = 1_000;
 ///
 /// Rounded **down** — the pool keeps sub-unit dust, so `k` never decreases.
 /// `amount_in` is already net of fees (the caller deducts them). Returns
-/// [`MathError::Overflow`] only if `reserve_in + amount_in` exceeds `u128`.
+/// [`MathError::Overflow`] if `reserve_in + amount_in` exceeds `u128`, or
+/// [`MathError::DivByZero`] if `reserve_in == 0` (a pool with no in-side reserve
+/// is not a valid curve — otherwise `out` would collapse to the whole
+/// `reserve_out`; a live pool never reaches this, but the guard is symmetric
+/// with [`in_given_out`]).
 pub fn out_given_in(reserve_in: u128, reserve_out: u128, amount_in: u128) -> MathResult<u128> {
     if amount_in == 0 {
         return Ok(0);
+    }
+    if reserve_in == 0 {
+        return Err(MathError::DivByZero);
     }
     let denom = reserve_in
         .checked_add(amount_in)
@@ -64,8 +71,14 @@ pub fn in_given_out(reserve_in: u128, reserve_out: u128, amount_out: u128) -> Ma
 /// `sqrt(amount_a * amount_b)`.
 ///
 /// The product is taken in 256 bits so two `u128` amounts cannot overflow; the
-/// square root of a value `< 2^256` always fits `u128`. The program mints this
-/// minus [`MINIMUM_LIQUIDITY`] to the first LP and locks the remainder.
+/// square root of a value `< 2^256` always fits `u128`. This returns the *total*
+/// geometric mean; the program mints `result - MINIMUM_LIQUIDITY` to the first
+/// LP and locks the remainder.
+///
+/// The caller MUST reject a first deposit whose geometric mean is
+/// `<= MINIMUM_LIQUIDITY` (use a checked subtraction). Otherwise the
+/// `- MINIMUM_LIQUIDITY` step underflows and the donation-attack mitigation is
+/// void — the guard, not this function, is what closes the attack.
 pub fn initial_shares(amount_a: u128, amount_b: u128) -> MathResult<u128> {
     let product = U256::from(amount_a) * U256::from(amount_b);
     to_u128(sqrt_u256(product))
@@ -131,6 +144,9 @@ mod tests {
         assert_eq!(out_given_in(1000, 1000, 0).unwrap(), 0);
         // Output can approach but never reach the full out-reserve.
         assert!(out_given_in(1, 1000, u64::MAX as u128).unwrap() < 1000);
+        // A pool with no in-side reserve is not a valid curve (would pay out the
+        // whole out-reserve for any input) — guarded, symmetric with in_given_out.
+        assert_eq!(out_given_in(0, 1000, 1), Err(MathError::DivByZero));
     }
 
     #[test]
