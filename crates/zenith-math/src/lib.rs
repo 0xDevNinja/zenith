@@ -23,11 +23,16 @@ pub enum Rounding {
 pub const SCALE_OFFSET: u32 = 64;
 
 mod bin_price;
+mod constant_product;
 mod q64;
 mod sqrt_price;
 mod u256;
 
 pub use bin_price::{bin_price, pow, MAX_BIN_STEP_BPS, MAX_PRICE_BITS, MIN_PRICE_BITS};
+pub use constant_product::{
+    in_given_out, initial_shares, matching_amount, out_given_in, shares_from_deposit,
+    tokens_for_shares, MINIMUM_LIQUIDITY,
+};
 pub use q64::Q64x64;
 pub use sqrt_price::{
     delta_a, delta_b, liquidity_from_amount_a, liquidity_from_amount_b,
