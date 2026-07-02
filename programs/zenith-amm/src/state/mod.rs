@@ -3,10 +3,12 @@
 mod config;
 mod pool;
 mod position;
+mod tick;
 
 pub use config::Config;
 pub use pool::{Pool, PoolStatus, TokenFlavor};
 pub use position::Position;
+pub use tick::{Tick, TickArray};
 
 #[cfg(test)]
 mod tests {
@@ -87,14 +89,16 @@ mod tests {
             volatility_reduction_factor: 0,
             max_dynamic_fee_bps: 0,
             partner_fee_bps: 0,
+            tick_spacing: 64,
             fee_scheduler_mode: 0,
             bump: 251,
-            reserved: [0u8; 16],
+            reserved: [0u8; 14],
         };
         let bytes = c.try_to_vec().unwrap();
         let back = Config::try_from_slice(&bytes).unwrap();
         assert_eq!(back.index, 7);
         assert_eq!(back.base_fee_bps, 25);
+        assert_eq!(back.tick_spacing, 64);
         assert_eq!(back.sqrt_max_price, 1u128 << 96);
         assert_eq!(back.admin, c.admin);
     }
@@ -113,11 +117,15 @@ mod tests {
             fee_pending_b: 2,
             bump: 250,
             compounding: 0,
-            reserved: [0u8; 63],
+            tick_lower: -600,
+            tick_upper: 600,
+            reserved: [0u8; 55],
         };
         let bytes = p.try_to_vec().unwrap();
         let back = Position::try_from_slice(&bytes).unwrap();
         assert_eq!(back.total_liquidity(), 125);
+        assert_eq!(back.tick_lower, -600);
+        assert_eq!(back.tick_upper, 600);
         assert_eq!(back.nft_mint, p.nft_mint);
     }
 }

@@ -57,6 +57,18 @@ pub fn position_nft_custody_pda(nft_mint: &Pubkey) -> (Pubkey, u8) {
     Pubkey::find_program_address(&[POSITION_NFT_SEED, nft_mint.as_ref()], &crate::ID)
 }
 
+/// Tick-array PDA for a pool + the array's start tick index.
+pub fn tick_array_pda(pool: &Pubkey, start_tick_index: i32) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[
+            TICK_ARRAY_SEED,
+            pool.as_ref(),
+            &start_tick_index.to_le_bytes(),
+        ],
+        &crate::ID,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -92,6 +104,18 @@ mod tests {
         // `position` vs `position_nft` seeds must not collide for the same NFT
         let nft = Pubkey::new_unique();
         assert_ne!(position_pda(&nft).0, position_nft_custody_pda(&nft).0);
+    }
+
+    #[test]
+    fn tick_array_pda_is_deterministic_and_index_keyed() {
+        let pool = Pubkey::new_unique();
+        assert_eq!(tick_array_pda(&pool, 0), tick_array_pda(&pool, 0));
+        // different start index -> different array; negative indices distinct.
+        assert_ne!(tick_array_pda(&pool, 0).0, tick_array_pda(&pool, 5632).0);
+        assert_ne!(
+            tick_array_pda(&pool, -5632).0,
+            tick_array_pda(&pool, 5632).0
+        );
     }
 
     #[test]
