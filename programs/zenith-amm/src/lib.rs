@@ -41,6 +41,7 @@ pub mod zenith_amm {
         protocol_fee_bps: u16,
         partner: Pubkey,
         partner_fee_bps: u16,
+        tick_spacing: u16,
         fee_scheduler_mode: u8,
         cliff_fee_bps: u16,
         reduction_factor: u16,
@@ -63,6 +64,7 @@ pub mod zenith_amm {
             protocol_fee_bps,
             partner,
             partner_fee_bps,
+            tick_spacing,
             instructions::FeeSchedulerParams {
                 mode: fee_scheduler_mode,
                 cliff_fee_bps,
@@ -79,6 +81,12 @@ pub mod zenith_amm {
                 max_dynamic_fee_bps,
             },
         )
+    }
+
+    /// Allocate a tick-array account for a pool (permissionless; rent paid by
+    /// the caller). Required before ticks in that range can be used.
+    pub fn init_tick_array(ctx: Context<InitTickArray>, start_tick_index: i32) -> Result<()> {
+        instructions::init_tick_array(ctx, start_tick_index)
     }
 
     /// Create a pool from a config and open the creator's first position.
