@@ -22,6 +22,7 @@ use crate::constants::POOL_AUTHORITY_SEED;
 use crate::errors::CammError;
 use crate::events::LiquidityAdded;
 use crate::state::Pool;
+use crate::yield_math::accrued_yield;
 
 #[derive(Accounts)]
 pub struct AddLiquidity<'info> {
@@ -114,10 +115,39 @@ pub fn add_liquidity(
             shares_out = out;
             locked = MINIMUM_LIQUIDITY as u64;
         } else {
+            // Price in yield accrued but not yet harvested, so a deposit made
+            // just before a harvest cannot mint shares cheaply and capture the
+            // pending lump (the yield-JIT attack). The effective reserve is the
+            // physical reserve plus pending yield on the currently-deployed
+            // principal (clamped to the reserve, matching the accrual base in
+            // harvest). Deposited amounts and tracked reserves stay physical;
+            // only the ratio and share-count math see the effective reserve.
+            let now = Clock::get()?.slot;
+            let elapsed = now.saturating_sub(pool.last_accrual_slot);
+            let pending_a = accrued_yield(
+                pool.deployed_a.min(pool.reserve_a),
+                pool.yield_rate,
+                elapsed,
+            )
+            .map_err(|_| CammError::MathOverflow)?;
+            let pending_b = accrued_yield(
+                pool.deployed_b.min(pool.reserve_b),
+                pool.yield_rate,
+                elapsed,
+            )
+            .map_err(|_| CammError::MathOverflow)?;
+            let ra = pool
+                .reserve_a
+                .checked_add(pending_a)
+                .ok_or(CammError::MathOverflow)?;
+            let rb = pool
+                .reserve_b
+                .checked_add(pending_b)
+                .ok_or(CammError::MathOverflow)?;
+
             // Trim to the current ratio so the pair deposits balanced. Try to use
             // all of A and compute the matching B; if that needs more B than
             // desired, pin B instead and compute the matching A.
-            let (ra, rb) = (pool.reserve_a, pool.reserve_b);
             let b_opt = matching_amount(desired_a as u128, ra as u128, rb as u128)
                 .map_err(|_| CammError::MathOverflow)?;
             let (a_used, b_used) = if b_opt <= desired_b as u128 {
