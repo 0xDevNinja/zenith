@@ -1,0 +1,28 @@
+{
+  "cluster": "devnet",
+  "programId": "CjjcK3rnskHswBpTgZquLGgS7P2QyzeaNwwe98FUUdy7",
+  "pool": "HmBojyfuF23uq71ZVGXW8jcMk2e8HUEtTsYujhFCYRXK",
+  "poolAuthority": "7W4Y7ZYSnDiapWk9RkZEVeENokhH6qbgViBp2ETasAe1",
+  "lpMint": "3rujUxMQxzUXkR9xmSC5ta8UGBp5zFZAv7KsWWT8Gr3S",
+  "lockedLp": "ALKrcDdmFwaF83ENyHWcW2mgikvxQVSMQ8M9XKMqUabW",
+  "reserveA": "CDdpTL59Vnj4DmwpaJgTSPD3uff1aXVyGNbFxwDspZQ5",
+  "reserveB": "Ez3iE2yWtYsjJnET6Md9wxX82JiUzwTpLrfuvG9cM9k9",
+  "yieldSourceA": "J3gJPjrR8q9gMRgZfTY67CxnrrzvjSqZwCk4NhGjTJ4A",
+  "yieldSourceB": "8E1tg46EGgR54JxUZiMDrcgtj5kBhqqT4mFodZwLT3Py",
+  "tokenA": "3btCV9PEAvck5CVWmDhcj8dzWiHEMgzgARp5JQPLPnfB",
+  "tokenB": "5SMqgRNCK4LJpQY1scitwXVgV6y6HNqkABdvVpHswLuo",
+  "baseFeeBps": 30,
+  "protocolFeeRate": 2000,
+  "yieldRate": "1000",
+  "bufferBps": 1000,
+  "mints": {
+    "3btCV9PEAvck5CVWmDhcj8dzWiHEMgzgARp5JQPLPnfB": {
+      "symbol": "tUSD",
+      "decimals": 6
+    },
+    "5SMqgRNCK4LJpQY1scitwXVgV6y6HNqkABdvVpHswLuo": {
+      "symbol": "tCP",
+      "decimals": 6
+    }
+  }
+}
