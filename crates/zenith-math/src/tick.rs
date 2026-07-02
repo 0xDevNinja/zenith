@@ -314,6 +314,22 @@ mod tests {
     }
 
     #[test]
+    fn tick_strictly_monotonic_positive_mid_domain() {
+        // Belt-and-suspenders: a dense adjacent walk in the positive mid-domain
+        // (away from zero and from the edges). Resolution is coarser here than at
+        // MIN_TICK, so this is guaranteed by the deep-edge walk, but exercising it
+        // directly leaves no untested adjacent region on the upper half.
+        let mut prev = sqrt_price_at_tick(100_000).unwrap();
+        let mut t = 100_001;
+        while t <= 105_000 {
+            let cur = sqrt_price_at_tick(t).unwrap();
+            assert!(cur > prev, "not strictly increasing at tick {t}");
+            prev = cur;
+            t += 1;
+        }
+    }
+
+    #[test]
     fn tick_round_trip() {
         // tick_at_sqrt_price(sqrt_price_at_tick(t)) == t for a spread of ticks.
         for &t in &[
